@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "configurationVersion": "factory-1.0.0",
+  "vision": {
+    "cameraId": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "streamFps": 12,
+    "modelPath": "models/yolo26/yolo26s.pt",
+    "confidenceThreshold": 0.35,
+    "stableFrames": 5,
+    "presenceTimeoutSeconds": 12,
+    "minimumBoxAreaFraction": 0.025,
+    "roi": {"x": 0.16, "y": 0.12, "width": 0.68, "height": 0.76}
+  },
+  "feeder": {
+    "stepsForward": 1600,
+    "stepsReverse": 1600,
+    "stepRate": 600,
+    "settleMs": 450,
+    "completionTimeoutSeconds": 18
+  },
+  "servos": {
+    "inletValve": {"openAngle": 180, "closedAngle": 100, "settleMs": 700},
+    "safeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
+    "unsafeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500}
+  },
+  "sampling": {
+    "durationSeconds": 90,
+    "targetRateHz": 1.0,
+    "maximumGapSeconds": 3.0,
+    "minimumSampleFraction": 0.9,
+    "requiredChannels": ["mq3", "mq136", "ch2o", "temperature", "humidity"]
+  },
+  "purge": {"durationSeconds": 30, "maximumSeconds": 180},
+  "protocol": {
+    "baudRate": 115200,
+    "protocolVersion": "1.0",
+    "heartbeatTimeoutSeconds": 4,
+    "ackTimeoutSeconds": 2,
+    "completionTimeoutSeconds": 20
+  },
+  "safety": {"noFruitAutomaticRetries": 0, "inconclusiveRoute": "UNSAFE"}
+}
+

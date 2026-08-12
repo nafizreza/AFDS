@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0",
+  "freshFlapServo": 25,
+  "rejectFlapServo": 26,
+  "feederValveServo": 32,
+  "mq3": 34,
+  "mq136": 35,
+  "dht22": 27,
+  "ze08Rx": 16,
+  "ze08Tx": 17,
+  "step": 18,
+  "direction": 19,
+  "enable": 23,
+  "pump": 33,
+  "homeLimit": -1,
+  "farLimit": -1
+}
+
