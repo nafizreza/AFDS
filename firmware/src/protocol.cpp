@@ -92,9 +92,15 @@ void sendSensorData(const String& messageId, const String& sessionId, const Stri
   payload["deviceMillis"] = millis();
   payload["mq3"] = mq3;
   payload["mq136"] = mq136;
-  payload["ch2o"] = validCh2o ? ch2o : nullptr;
-  payload["temperature"] = validDht ? temperature : nullptr;
-  payload["humidity"] = validDht ? humidity : nullptr;
+  if (validCh2o) payload["ch2o"] = ch2o;
+  else payload["ch2o"] = nullptr;
+  if (validDht) {
+    payload["temperature"] = temperature;
+    payload["humidity"] = humidity;
+  } else {
+    payload["temperature"] = nullptr;
+    payload["humidity"] = nullptr;
+  }
   JsonObject quality = payload["quality"].to<JsonObject>();
   quality["ch2oValid"] = validCh2o;
   quality["dhtValid"] = validDht;
