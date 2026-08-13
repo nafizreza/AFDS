@@ -5,6 +5,8 @@
 
 class Actuators {
  public:
+  using ServiceCallback = void (*)();
+
   void begin();
   void applySafeState(bool closeValve = true, bool homeFlaps = true);
   void valve(int angle);
@@ -12,7 +14,8 @@ class Actuators {
   void rejectFlap(int angle);
   void pump(bool on, uint32_t maximumMs = 0);
   void service();
-  bool moveStepper(bool forward, uint32_t steps, uint32_t rate);
+  bool moveStepper(bool forward, uint32_t steps, uint32_t rate,
+                   ServiceCallback serviceCallback = nullptr);
   void stopStepper();
   void disableStepper();
   bool pumpOn() const { return pumpOn_; }
@@ -26,4 +29,3 @@ class Actuators {
   bool stepperEnabled_ = false;
   uint32_t pumpDeadline_ = 0;
 };
-

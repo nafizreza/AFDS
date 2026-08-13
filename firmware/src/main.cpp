@@ -21,6 +21,15 @@ struct SensorStream {
 
 uint32_t heartbeatAt = 0;
 
+void serviceRuntime() {
+  actuators.service();
+  const uint32_t now = millis();
+  if (static_cast<int32_t>(now - heartbeatAt) >= 0) {
+    sendHeartbeat(actuators.pumpOn(), actuators.stepperEnabled(), stream.active);
+    heartbeatAt = now + Board::HEARTBEAT_MS;
+  }
+}
+
 int payloadInt(const CommandFrame& frame, const char* key, int fallback) {
   return frame.payload[key].is<int>() ? frame.payload[key].as<int>() : fallback;
 }
@@ -64,14 +73,15 @@ void handleCommand(const CommandFrame& frame) {
     const uint32_t stepsForward = payloadInt(frame, "stepsForward", 1600);
     const uint32_t stepsReverse = payloadInt(frame, "stepsReverse", 1600);
     const uint32_t rate = payloadInt(frame, "stepRate", 600);
-    if (!actuators.moveStepper(true, stepsForward, rate)) { sendError(frame, "INVALID_MOTION", "Invalid feeder parameters"); return; }
+    if (!actuators.moveStepper(true, stepsForward, rate, serviceRuntime)) { sendError(frame, "INVALID_MOTION", "Invalid feeder parameters"); return; }
     delay(payloadInt(frame, "settleMs", 450));
-    if (!actuators.moveStepper(false, stepsReverse, rate)) { sendError(frame, "INVALID_MOTION", "Invalid reverse parameters"); return; }
+    serviceRuntime();
+    if (!actuators.moveStepper(false, stepsReverse, rate, serviceRuntime)) { sendError(frame, "INVALID_MOTION", "Invalid reverse parameters"); return; }
     actuators.disableStepper();
     completeSimple(frame, "FEED_COMPLETED");
   } else if (command == "STEPPER_MOVE") {
     const bool forward = String(frame.payload["direction"] | "FORWARD") != "REVERSE";
-    if (!actuators.moveStepper(forward, payloadInt(frame, "steps", 0), payloadInt(frame, "stepRate", 600))) { sendError(frame, "INVALID_MOTION", "Steps or rate outside safe bounds"); return; }
+    if (!actuators.moveStepper(forward, payloadInt(frame, "steps", 0), payloadInt(frame, "stepRate", 600), serviceRuntime)) { sendError(frame, "INVALID_MOTION", "Steps or rate outside safe bounds"); return; }
     actuators.disableStepper();
     completeSimple(frame, "STEPPER_MOVE_COMPLETED");
   } else if (command == "STEPPER_STOP") {
@@ -102,7 +112,7 @@ void handleCommand(const CommandFrame& frame) {
     const uint32_t seconds = constrain(payloadInt(frame, "durationSeconds", 30), 1, 180);
     actuators.pump(true, seconds * 1000UL);
     const uint32_t start = millis();
-    while (millis() - start < seconds * 1000UL) { actuators.service(); delay(5); }
+    while (millis() - start < seconds * 1000UL) { serviceRuntime(); delay(5); }
     actuators.pump(false); completeSimple(frame, "PURGE_COMPLETED");
   } else if (command == "SENSOR_SNAPSHOT") {
     sampleAndSend(frame.messageId, frame.sessionId, frame.cycleId); completeSimple(frame, "SENSOR_SNAPSHOT_COMPLETED");
@@ -128,7 +138,7 @@ void setup() {
 }
 
 void loop() {
-  actuators.service();
+  serviceRuntime();
   JsonDocument document;
   CommandFrame frame;
   if (readCommand(frame, document)) handleCommand(frame);
@@ -138,9 +148,4 @@ void loop() {
     sampleAndSend(stream.messageId, stream.sessionId, stream.cycleId);
     stream.nextAt = now + stream.intervalMs;
   }
-  if (static_cast<int32_t>(now - heartbeatAt) >= 0) {
-    sendHeartbeat(actuators.pumpOn(), actuators.stepperEnabled(), stream.active);
-    heartbeatAt = now + Board::HEARTBEAT_MS;
-  }
 }
-

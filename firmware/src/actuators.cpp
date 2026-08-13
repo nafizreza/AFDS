@@ -51,7 +51,8 @@ void Actuators::service() {
   if (pumpOn_ && pumpDeadline_ && static_cast<int32_t>(millis() - pumpDeadline_) >= 0) pump(false);
 }
 
-bool Actuators::moveStepper(bool forward, uint32_t steps, uint32_t rate) {
+bool Actuators::moveStepper(bool forward, uint32_t steps, uint32_t rate,
+                            ServiceCallback serviceCallback) {
   if (!steps || steps > Defaults::MAX_STEPPER_STEPS || rate < 10 || rate > 5000) return false;
   digitalWrite(Board::STEPPER_DIR, forward ? HIGH : LOW);
   setEnable(true);
@@ -62,11 +63,11 @@ bool Actuators::moveStepper(bool forward, uint32_t steps, uint32_t rate) {
     delayMicroseconds(halfPeriodUs);
     digitalWrite(Board::STEPPER_STEP, LOW);
     delayMicroseconds(halfPeriodUs);
-    if ((i & 127U) == 0) service();
+    service();
+    if (serviceCallback) serviceCallback();
   }
   return true;
 }
 
 void Actuators::stopStepper() { digitalWrite(Board::STEPPER_STEP, LOW); }
 void Actuators::disableStepper() { setEnable(false); stepperEnabled_ = false; }
-
