@@ -7,9 +7,12 @@ $backend = Start-Process -FilePath $python -ArgumentList "-m", "uvicorn", "backe
 Write-Host "Backend PID: $($backend.Id)" -ForegroundColor DarkGray
 Push-Location (Join-Path $projectRoot "frontend")
 try {
-    pnpm run dev
+    $pnpm = Get-Command "pnpm.cmd" -ErrorAction SilentlyContinue
+    $npm = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
+    if ($npm) { & $npm.Source run dev }
+    elseif ($pnpm) { & $pnpm.Source run dev }
+    else { throw "Node.js package manager not found." }
 } finally {
     Pop-Location
     Stop-Process -Id $backend.Id -ErrorAction SilentlyContinue
 }
-

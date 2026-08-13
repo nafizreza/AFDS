@@ -14,7 +14,7 @@ AFDS is a local, hardware-first fruit inspection and sorting application. It has
 
 ## Quick start
 
-1. Install Python 3.10+, Node.js, pnpm and PlatformIO.
+1. Install Python 3.10+, Node.js 20+ and PlatformIO. pnpm is optional; the scripts automatically fall back to npm.
 2. Copy `.env.example` to `.env` and set the ESP32 serial port.
 3. Run `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`.
 4. Build/flash `firmware/` and complete `docs/COMMISSIONING.md`.
