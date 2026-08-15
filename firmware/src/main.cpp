@@ -62,8 +62,13 @@ void handleCommand(const CommandFrame& frame) {
     completeSimple(frame, "INITIALIZED", Defaults::SERVO_SETTLE_MS);
   } else if (command == "SET_SAFE_STATE") {
     stream.active = false;
-    actuators.applySafeState(frame.payload["closeValve"] | true, frame.payload["homeFlaps"] | true);
-    completeSimple(frame, "SAFE_STATE_APPLIED", Defaults::SERVO_SETTLE_MS);
+    actuators.applySafeState(
+        frame.payload["closeValve"] | true, frame.payload["homeFlaps"] | true,
+        payloadInt(frame, "valveClosedAngle", Defaults::VALVE_CLOSED_ANGLE),
+        payloadInt(frame, "safeHomeAngle", Defaults::SAFE_HOME_ANGLE),
+        payloadInt(frame, "unsafeHomeAngle", Defaults::UNSAFE_HOME_ANGLE));
+    completeSimple(frame, "SAFE_STATE_APPLIED",
+                   payloadInt(frame, "settleMs", Defaults::SERVO_SETTLE_MS));
   } else if (command == "VALVE_OPEN" || command == "VALVE_CLOSE") {
     const bool open = command == "VALVE_OPEN";
     actuators.valve(payloadInt(frame, "angle", open ? Defaults::VALVE_OPEN_ANGLE : Defaults::VALVE_CLOSED_ANGLE));
@@ -109,8 +114,9 @@ void handleCommand(const CommandFrame& frame) {
   } else if (command == "PUMP_OFF") {
     actuators.pump(false); completeSimple(frame, "PUMP_STATUS");
   } else if (command == "PURGE_TIMED") {
-    const uint32_t seconds = constrain(payloadInt(frame, "durationSeconds", 30), 1, 180);
-    actuators.pump(true, seconds * 1000UL);
+    const uint32_t maximumSeconds = constrain(payloadInt(frame, "maximumSeconds", 180), 1, 900);
+    const uint32_t seconds = constrain(payloadInt(frame, "durationSeconds", 30), 1, maximumSeconds);
+    actuators.pump(true, maximumSeconds * 1000UL);
     const uint32_t start = millis();
     while (millis() - start < seconds * 1000UL) { serviceRuntime(); delay(5); }
     actuators.pump(false); completeSimple(frame, "PURGE_COMPLETED");

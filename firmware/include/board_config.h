@@ -35,6 +35,5 @@ constexpr uint32_t SERVO_SETTLE_MS = 700;
 constexpr uint32_t FLAP_HOLD_MS = 1500;
 constexpr uint32_t FLAP_SETTLE_MS = 500;
 constexpr uint32_t MAX_STEPPER_STEPS = 50000;
-constexpr uint32_t MAX_PUMP_MS = 180000;
+constexpr uint32_t MAX_PUMP_MS = 900000;
 }  // namespace Defaults
-

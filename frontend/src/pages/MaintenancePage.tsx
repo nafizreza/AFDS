@@ -41,17 +41,18 @@ export function MaintenancePage({ state, operator, run }: PageProps) {
         <Panel title="Chamber purge" kicker="VACUUM PUMP"><div className="fields">{field("Purge duration (s)", "purge.durationSeconds", 5, 600)}{field("Maximum duration (s)", "purge.maximumSeconds", 10, 900)}</div></Panel>
       </div>
       <Panel title="Component verification bench" kicker="GUARDED MANUAL TESTS" action={<StatusPill tone={owned ? "good" : "neutral"}>{owned ? "Controls enabled" : "Lock required"}</StatusPill>}>
-        <p className="bench-intro">Use short, bounded motions while observing the physical mechanism. Each button sends a real hardware command; no simulated response is available.</p>
+        <p className="bench-intro">Tests use the values currently displayed above. Save them first to make the same values active for automatic operation. Each button sends a real hardware command; no simulated response is available.</p>
         <div className="test-bench">
-          <button disabled={!owned} onClick={() => test("VALVE_OPEN")}>Open inlet</button>
-          <button disabled={!owned} onClick={() => test("VALVE_CLOSE")}>Close inlet</button>
+          <button disabled={!owned} onClick={() => test("VALVE_OPEN", { angle: draft.servos.inletValve.openAngle, settleMs: draft.servos.inletValve.settleMs })}>Open inlet · {draft.servos.inletValve.openAngle}°</button>
+          <button disabled={!owned} onClick={() => test("VALVE_CLOSE", { angle: draft.servos.inletValve.closedAngle, settleMs: draft.servos.inletValve.settleMs })}>Close inlet · {draft.servos.inletValve.closedAngle}°</button>
           <button disabled={!owned} onClick={() => test("STEPPER_MOVE", { direction: "FORWARD", steps: 100, stepRate: 300 })}>Jog feeder 100</button>
-          <button disabled={!owned} onClick={() => test("SAFE_FLAP_TEST", { angle: draft.servos.safeFlap.dropAngle, holdMs: 900, homeAngle: draft.servos.safeFlap.homeAngle })}>Test safe flap</button>
-          <button disabled={!owned} onClick={() => test("UNSAFE_FLAP_TEST", { angle: draft.servos.unsafeFlap.dropAngle, holdMs: 900, homeAngle: draft.servos.unsafeFlap.homeAngle })}>Test unsafe flap</button>
+          <button disabled={!owned} onClick={() => test("FEED_ONE", draft.feeder)}>Test configured feed cycle</button>
+          <button disabled={!owned} onClick={() => test("SAFE_FLAP_TEST", { angle: draft.servos.safeFlap.dropAngle, holdMs: draft.servos.safeFlap.holdMs, homeAngle: draft.servos.safeFlap.homeAngle, settleMs: draft.servos.safeFlap.settleMs })}>Test safe flap · {draft.servos.safeFlap.dropAngle}°</button>
+          <button disabled={!owned} onClick={() => test("UNSAFE_FLAP_TEST", { angle: draft.servos.unsafeFlap.dropAngle, holdMs: draft.servos.unsafeFlap.holdMs, homeAngle: draft.servos.unsafeFlap.homeAngle, settleMs: draft.servos.unsafeFlap.settleMs })}>Test unsafe flap · {draft.servos.unsafeFlap.dropAngle}°</button>
           <button disabled={!owned} onClick={() => test("PURGE_TIMED", { durationSeconds: 5, maximumSeconds: 10 })}>Pump 5 seconds</button>
           <button disabled={!owned} onClick={() => test("SENSOR_SNAPSHOT")}>Sensor snapshot</button>
           <button disabled={!owned || !state.vision.ready} onClick={() => test("CAMERA_DETECT")}>YOLO capture</button>
-          <button className="danger-outline" disabled={!owned} onClick={() => test("SET_SAFE_STATE", { closeValve: true, homeFlaps: true })}>Apply safe state</button>
+          <button className="danger-outline" disabled={!owned} onClick={() => test("SET_SAFE_STATE", { closeValve: true, homeFlaps: true, valveClosedAngle: draft.servos.inletValve.closedAngle, safeHomeAngle: draft.servos.safeFlap.homeAngle, unsafeHomeAngle: draft.servos.unsafeFlap.homeAngle })}>Apply configured safe state</button>
         </div>
         <div className="bench-result">{testResult}</div>
       </Panel>

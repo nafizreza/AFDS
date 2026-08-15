@@ -143,11 +143,61 @@ class SerialHardware:
         if self.event_callback:
             await self.event_callback(topic, payload)
 
+    def _payload_with_active_defaults(self, command_name: str, payload: dict[str, Any] | None) -> dict[str, Any]:
+        """Translate saved configuration names into the firmware command contract.
+
+        Explicit command values always win, which lets Maintenance test an
+        unsaved draft. Missing values come from the current active config.
+        """
+        result = dict(payload or {})
+        servos = self.config["servos"]
+        inlet = servos["inletValve"]
+        safe = servos["safeFlap"]
+        unsafe = servos["unsafeFlap"]
+
+        if command_name == Command.VALVE_OPEN.value:
+            result.setdefault("angle", result.get("openAngle", inlet["openAngle"]))
+            result.setdefault("settleMs", inlet["settleMs"])
+        elif command_name == Command.VALVE_CLOSE.value:
+            result.setdefault("angle", result.get("closedAngle", inlet["closedAngle"]))
+            result.setdefault("settleMs", inlet["settleMs"])
+        elif command_name == Command.FEED_ONE.value:
+            for key, value in self.config["feeder"].items():
+                result.setdefault(key, value)
+        elif command_name in {Command.SAFE_FLAP_TEST.value, Command.SORT_SAFE.value}:
+            result.setdefault("angle", result.get("dropAngle", safe["dropAngle"]))
+            result.setdefault("homeAngle", safe["homeAngle"])
+            result.setdefault("holdMs", safe["holdMs"])
+            result.setdefault("settleMs", safe["settleMs"])
+        elif command_name == Command.SAFE_FLAP_HOME.value:
+            result.setdefault("angle", result.get("homeAngle", safe["homeAngle"]))
+            result.setdefault("settleMs", safe["settleMs"])
+        elif command_name in {Command.UNSAFE_FLAP_TEST.value, Command.SORT_UNSAFE.value}:
+            result.setdefault("angle", result.get("dropAngle", unsafe["dropAngle"]))
+            result.setdefault("homeAngle", unsafe["homeAngle"])
+            result.setdefault("holdMs", unsafe["holdMs"])
+            result.setdefault("settleMs", unsafe["settleMs"])
+        elif command_name == Command.UNSAFE_FLAP_HOME.value:
+            result.setdefault("angle", result.get("homeAngle", unsafe["homeAngle"]))
+            result.setdefault("settleMs", unsafe["settleMs"])
+        elif command_name == Command.PURGE_TIMED.value:
+            result.setdefault("durationSeconds", self.config["purge"]["durationSeconds"])
+            result.setdefault("maximumSeconds", self.config["purge"]["maximumSeconds"])
+        elif command_name == Command.SET_SAFE_STATE.value:
+            result.setdefault("closeValve", True)
+            result.setdefault("homeFlaps", True)
+            result.setdefault("valveClosedAngle", inlet["closedAngle"])
+            result.setdefault("safeHomeAngle", safe["homeAngle"])
+            result.setdefault("unsafeHomeAngle", unsafe["homeAngle"])
+            result.setdefault("settleMs", max(inlet["settleMs"], safe["settleMs"], unsafe["settleMs"]))
+        return result
+
     async def command(self, name: str | Command, payload: dict[str, Any] | None = None, *, session_id: str | None = None, cycle_id: str | None = None, completion_timeout: float | None = None) -> dict[str, Any]:
         if not self.connected or not self._serial:
             raise HardwareError("ESP32 is disconnected")
         command_name = name.value if isinstance(name, Command) else str(name).upper()
-        envelope = command_envelope(command_name, payload, session_id=session_id, cycle_id=cycle_id)
+        normalized_payload = self._payload_with_active_defaults(command_name, payload)
+        envelope = command_envelope(command_name, normalized_payload, session_id=session_id, cycle_id=cycle_id)
         message_id = envelope["messageId"]
         loop = asyncio.get_running_loop()
         ack = loop.create_future()
@@ -187,7 +237,7 @@ class SerialHardware:
             self._pending_completion.pop(message_id, None)
 
     async def safe_state(self) -> None:
-        await self.command(Command.SET_SAFE_STATE, {"closeValve": True, "homeFlaps": True})
+        await self.command(Command.SET_SAFE_STATE)
         self._outputs.update({"pump": "OFF", "stepper": "DISABLED", "inletValve": "CLOSED", "safeFlap": "HOME", "unsafeFlap": "HOME"})
 
     async def collect_sensors(self, duration: float, rate_hz: float, session_id: str, cycle_id: str) -> list[dict[str, Any]]:

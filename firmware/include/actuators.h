@@ -8,7 +8,9 @@ class Actuators {
   using ServiceCallback = void (*)();
 
   void begin();
-  void applySafeState(bool closeValve = true, bool homeFlaps = true);
+  void applySafeState(bool closeValve = true, bool homeFlaps = true,
+                      int valveClosedAngle = 100, int safeHomeAngle = 60,
+                      int rejectHomeAngle = 60);
   void valve(int angle);
   void safeFlap(int angle);
   void rejectFlap(int angle);

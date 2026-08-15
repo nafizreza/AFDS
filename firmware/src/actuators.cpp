@@ -26,14 +26,16 @@ void Actuators::begin() {
   applySafeState();
 }
 
-void Actuators::applySafeState(bool closeValve, bool homeFlaps) {
+void Actuators::applySafeState(bool closeValve, bool homeFlaps,
+                               int valveClosedAngle, int safeHomeAngle,
+                               int rejectHomeAngle) {
   pump(false);
   stopStepper();
   disableStepper();
-  if (closeValve) valve(Defaults::VALVE_CLOSED_ANGLE);
+  if (closeValve) valve(valveClosedAngle);
   if (homeFlaps) {
-    safeFlap(Defaults::SAFE_HOME_ANGLE);
-    rejectFlap(Defaults::UNSAFE_HOME_ANGLE);
+    safeFlap(safeHomeAngle);
+    rejectFlap(rejectHomeAngle);
   }
 }
 
