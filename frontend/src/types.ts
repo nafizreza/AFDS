@@ -1,5 +1,6 @@
 export type State = {
   state: string;
+  stateEnteredAt?: string;
   stateVersion: number;
   owner: string;
   operator?: string | null;
@@ -33,6 +34,10 @@ export type State = {
     checksum: string;
     thresholdProfile?: string;
     thresholdsCommissioned: boolean;
+    timings?: {
+      samplingSeconds: number;
+      purgeSeconds: number;
+    };
   };
   controls: Record<string, boolean>;
 };

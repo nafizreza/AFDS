@@ -40,6 +40,7 @@ class AFDSController:
         self.vision = Yolo26VisionService(self.config_service.active)
         self.classifier = ThresholdClassifier(self.config_service.thresholds)
         self.state = SystemState.DISCONNECTED
+        self.state_entered_at = dt.datetime.now(dt.timezone.utc)
         self.owner = ControlOwner.NONE
         self.state_version = 0
         self.operator: str | None = None
@@ -77,6 +78,7 @@ class AFDSController:
         config = self.config_service.active
         return {
             "state": self.state.value,
+            "stateEnteredAt": self.state_entered_at.isoformat(),
             "stateVersion": self.state_version,
             "owner": self.owner.value,
             "operator": self.operator,
@@ -95,6 +97,10 @@ class AFDSController:
                 "checksum": checksum(config),
                 "thresholdProfile": self.config_service.thresholds.get("profileVersion"),
                 "thresholdsCommissioned": self.config_service.thresholds.get("commissioned", False),
+                "timings": {
+                    "samplingSeconds": float(config["sampling"]["durationSeconds"]),
+                    "purgeSeconds": float(config["purge"]["durationSeconds"]),
+                },
             },
             "controls": self._control_permissions(),
         }
@@ -121,6 +127,7 @@ class AFDSController:
     async def _transition(self, state: SystemState, *, owner: ControlOwner | None = None, detail: dict[str, Any] | None = None) -> None:
         previous = self.state
         self.state = state
+        self.state_entered_at = dt.datetime.now(dt.timezone.utc)
         if owner is not None:
             self.owner = owner
         self.state_version += 1

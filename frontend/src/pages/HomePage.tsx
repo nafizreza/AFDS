@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { Metric, Panel, StatusPill } from "../components";
 import type { PageProps } from "../App";
@@ -12,6 +13,43 @@ const MAIN_STAGES = [
 ] as const;
 
 const FEED_STATES = ["OPENING_VALVE", "FEEDING", "CLOSING_VALVE"];
+
+type TimedProgress = { elapsed: number; duration: number; percent: number; remaining: number };
+
+function useTimedProgress(active: boolean, duration: number, enteredAt?: string): TimedProgress {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setElapsed(0);
+      return;
+    }
+    const parsedStart = enteredAt ? Date.parse(enteredAt) : Number.NaN;
+    const startedAt = Number.isFinite(parsedStart) ? parsedStart : Date.now();
+    const update = () => setElapsed(Math.max(0, Math.min(duration, (Date.now() - startedAt) / 1000)));
+    update();
+    const timer = window.setInterval(update, 200);
+    return () => window.clearInterval(timer);
+  }, [active, duration, enteredAt]);
+  return {
+    elapsed,
+    duration,
+    percent: duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0,
+    remaining: Math.max(0, duration - elapsed),
+  };
+}
+
+function stageTime(seconds: number) {
+  const rounded = Math.max(0, Math.ceil(seconds));
+  return rounded >= 60 ? `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}` : `${rounded}s`;
+}
+
+function StageProgress({ progress, label }: { progress: TimedProgress; label: string }) {
+  return <div className="stage-progress" aria-label={`${label} ${progress.percent.toFixed(0)} percent complete`}>
+    <div className="stage-progress-readout"><span>{label}</span><strong>{progress.percent.toFixed(0)}%</strong></div>
+    <div className="stage-progress-track"><i style={{ width: `${progress.percent}%` }} /></div>
+    <div className="stage-progress-time"><b>{stageTime(progress.elapsed)} elapsed</b><small>{stageTime(progress.remaining)} remaining · {stageTime(progress.duration)} total</small></div>
+  </div>;
+}
 
 function mainStage(state: string) {
   if (FEED_STATES.includes(state)) return "feed";
@@ -101,11 +139,11 @@ function VisionExperience({ state, detection }: { state: string; detection: any 
   </div>;
 }
 
-function SignalGraph({ samples }: { samples: SensorSample[] }) {
+function SignalGraph({ samples, progress }: { samples: SensorSample[]; progress: TimedProgress }) {
   const view = samples.slice(-60);
   const channels: Array<[keyof SensorSample, string]> = [["mq3", "MQ-3"], ["mq136", "MQ-136"], ["ch2o", "CH₂O"], ["temperature", "TEMP"], ["humidity", "HUMIDITY"]];
   return <div className="analysis-experience">
-    <div className="analysis-copy"><span className="acquiring-orb" /><div><strong>Building the fruit signature</strong><p>Live responses are being captured as a clean timed evidence window for threshold screening.</p></div><b>{view.length}<small> samples in view</small></b></div>
+    <div className="analysis-copy"><span className="acquiring-orb" /><div><strong>Building the fruit signature</strong><p>Live responses are being captured as a clean timed evidence window for threshold screening.</p></div><StageProgress progress={progress} label="Sensor stream" /></div>
     <div className="signal-chart">
       <div className="chart-grid" />
       <svg viewBox="0 0 720 210" preserveAspectRatio="none" role="img" aria-label="Live normalized sensor response graph">{channels.map(([key]) => <path key={String(key)} className={`signal-line line-${String(key)}`} d={signalPath(view, key)} />)}</svg>
@@ -124,8 +162,8 @@ function DecisionExperience({ state, result }: { state: string; result?: Classif
   </div>;
 }
 
-function RecoveryExperience({ result }: { result?: Classification | null }) {
-  return <div className="recovery-experience"><div className="purge-turbine"><i /><i /><i /></div><div><span>CHAMBER RECOVERY</span><h2>Clearing residual gases for the next fruit.</h2><p>The vacuum pump is running for the configured purge window. The next cycle starts automatically when recovery completes.</p>{result && <b className={result.route === "SAFE" ? "safe" : "unsafe"}>Previous fruit · {result.condition.replaceAll("_", " ")}</b>}</div></div>;
+function RecoveryExperience({ result, progress }: { result?: Classification | null; progress: TimedProgress }) {
+  return <div className="recovery-experience"><div className="purge-turbine"><i /><i /><i /></div><div><span>CHAMBER RECOVERY</span><h2>Clearing residual gases for the next fruit.</h2><p>The vacuum pump is running for the configured purge window. The next cycle starts automatically when recovery completes.</p><StageProgress progress={progress} label="Chamber purge" />{result && <b className={result.route === "SAFE" ? "safe" : "unsafe"}>Previous fruit · {result.condition.replaceAll("_", " ")}</b>}</div></div>;
 }
 
 function IdleExperience({ state }: { state: string }) {
@@ -134,6 +172,7 @@ function IdleExperience({ state }: { state: string }) {
 }
 
 export function HomePage({ state, events, samples, operator, run }: PageProps) {
+  const cycleFocus = useRef<HTMLDivElement | null>(null);
   const control = state.controls || {};
   const stage = mainStage(state.state);
   const latestSample = samples.at(-1) || state.hardware.latestSensorSample;
@@ -141,6 +180,19 @@ export function HomePage({ state, events, samples, operator, run }: PageProps) {
   const resultState = ["SORTING_SAFE", "SORTING_UNSAFE", "CYCLE_COMPLETE"].includes(state.state);
   const resultTone = resultState && state.lastClassification?.route === "SAFE" ? "result-safe" : resultState && state.lastClassification ? "result-unsafe" : "";
   const stageName = MAIN_STAGES.find((item) => item.key === stage)?.label || "Standby";
+  const samplingDuration = state.configuration.timings?.samplingSeconds ?? 90;
+  const purgeDuration = state.configuration.timings?.purgeSeconds ?? 30;
+  const samplingProgress = useTimedProgress(state.state === "ACQUIRING", samplingDuration, state.stateEnteredAt);
+  const purgeProgress = useTimedProgress(state.state === "PURGING", purgeDuration, state.stateEnteredAt);
+
+  const startAutomatic = async () => {
+    try {
+      await run(() => api.start(operator, state.stateVersion));
+      window.setTimeout(() => cycleFocus.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    } catch {
+      // useAFDS already exposes the actionable API error in the dashboard.
+    }
+  };
 
   return <div className={`page overview-page immersive-overview ${state.state === "ACQUIRING" ? "sensor-active" : ""} ${resultTone}`}>
     <section className="overview-heading">
@@ -151,11 +203,12 @@ export function HomePage({ state, events, samples, operator, run }: PageProps) {
     <TelemetryDeck sample={latestSample} streaming={Boolean(state.hardware.sensorStreaming)} />
 
     <section className="overview-controls">
-      <div className="control-primary"><button className="primary" disabled={!control.initialize} onClick={() => run(() => api.initialize(operator, state.stateVersion))}>Initialize hardware</button><button className="success" disabled={!control.startAutomatic} onClick={() => run(() => api.start(operator, state.stateVersion))}>Start automatic cycle</button></div>
+      <div className="control-primary"><button className="primary" disabled={!control.initialize} onClick={() => run(() => api.initialize(operator, state.stateVersion))}>Initialize hardware</button><button className="success" disabled={!control.startAutomatic} onClick={startAutomatic}>Start automatic cycle</button></div>
       <div className="control-session"><button disabled={!control.pause} onClick={() => run(() => api.action("pause", state.stateVersion))}>Pause</button><button disabled={!control.resume} onClick={() => run(() => api.action("resume", state.stateVersion))}>Resume</button><button className="warning" disabled={!control.stopAfterCurrent} onClick={() => run(() => api.action("stop-after-current", state.stateVersion))}>Stop after current</button>{control.retryFeed && <button className="warning pulse" onClick={() => run(() => api.retry(operator, state.stateVersion))}>Path clear · retry feed</button>}</div>
       <StatusPill tone={state.owner === "AUTOMATION" ? "good" : "neutral"}>{state.owner}</StatusPill>
     </section>
 
+    <div ref={cycleFocus} className="cycle-focus-anchor" />
     <CycleRail stage={stage} />
 
     <section className={`cycle-stage stage-${stage}`}>
@@ -163,9 +216,9 @@ export function HomePage({ state, events, samples, operator, run }: PageProps) {
       <div className="cycle-stage-body">
         {stage === "feed" && <FeedExperience state={state.state} />}
         {stage === "vision" && <VisionExperience state={state.state} detection={detection} />}
-        {stage === "sense" && <SignalGraph samples={samples} />}
+        {stage === "sense" && <SignalGraph samples={samples} progress={samplingProgress} />}
         {stage === "result" && <DecisionExperience state={state.state} result={state.lastClassification} />}
-        {stage === "recover" && <RecoveryExperience result={state.lastClassification} />}
+        {stage === "recover" && <RecoveryExperience result={state.lastClassification} progress={purgeProgress} />}
         {stage === "idle" && <IdleExperience state={state.state} />}
       </div>
     </section>
