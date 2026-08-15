@@ -68,6 +68,7 @@ class AFDSController:
                 await self._cycle_task
         with contextlib.suppress(Exception):
             if self.hardware.connected:
+                await self.hardware.stop_telemetry()
                 await self.hardware.safe_state()
         await self.hardware.disconnect()
         await self.vision.close()
@@ -149,6 +150,7 @@ class AFDSController:
                 "servos": self.config_service.active["servos"],
             })
             await self.hardware.safe_state()
+            await self.hardware.start_telemetry(float(self.config_service.active["sampling"]["targetRateHz"]), force=True)
             await self.vision.initialize()
         except (HardwareError, VisionError) as exc:
             self.last_error = {"code": "PREFLIGHT_FAILED", "message": str(exc)}
@@ -392,6 +394,8 @@ class AFDSController:
         version = str(active.get("configurationVersion") or f"config-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}")
         self.database.save_configuration(version, operator, description, checksum(active), active)
         self.hardware.config = active
+        if self.hardware.connected:
+            await self.hardware.start_telemetry(float(active["sampling"]["targetRateHz"]), force=True)
         await self.vision.close()
         self.vision = Yolo26VisionService(active)
         await self._publish("configuration_changed", {"version": version, "operator": operator, "description": description})
@@ -410,6 +414,8 @@ class AFDSController:
         active = self.config_service.save(active)
         self.database.save_configuration(version, operator, f"Reset from {source}", checksum(active), active)
         self.hardware.config = active
+        if self.hardware.connected:
+            await self.hardware.start_telemetry(float(active["sampling"]["targetRateHz"]), force=True)
         await self.vision.close()
         self.vision = Yolo26VisionService(active)
         await self._publish("configuration_reset", {"version": version, "source": source, "operator": operator})

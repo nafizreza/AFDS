@@ -61,7 +61,6 @@ void handleCommand(const CommandFrame& frame) {
     actuators.applySafeState();
     completeSimple(frame, "INITIALIZED", Defaults::SERVO_SETTLE_MS);
   } else if (command == "SET_SAFE_STATE") {
-    stream.active = false;
     actuators.applySafeState(
         frame.payload["closeValve"] | true, frame.payload["homeFlaps"] | true,
         payloadInt(frame, "valveClosedAngle", Defaults::VALVE_CLOSED_ANGLE),

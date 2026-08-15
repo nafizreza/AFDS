@@ -52,6 +52,8 @@ class SerialHardware:
         self._connected = False
         self._last_heartbeat = 0.0
         self._latest_sample: dict[str, Any] | None = None
+        self._sensor_streaming = False
+        self._sensor_interval_ms: int | None = None
         self._outputs = {"pump": "OFF", "stepper": "DISABLED", "inletValve": "UNKNOWN", "safeFlap": "UNKNOWN", "unsafeFlap": "UNKNOWN"}
 
     @property
@@ -65,6 +67,8 @@ class SerialHardware:
             "port": self.port,
             "lastHeartbeatAgeSeconds": round(time.monotonic() - self._last_heartbeat, 2) if self._last_heartbeat else None,
             "latestSensorSample": self._latest_sample,
+            "sensorStreaming": self._sensor_streaming,
+            "sensorIntervalMs": self._sensor_interval_ms,
             "outputs": dict(self._outputs),
         }
 
@@ -117,6 +121,9 @@ class SerialHardware:
         message_id = str(message.get("messageId") or message.get("commandId") or "")
         if message_type == "heartbeat":
             self._last_heartbeat = time.monotonic()
+            stream_status = (message.get("payload") or {}).get("sensorStream")
+            if stream_status in {"ON", "OFF"}:
+                self._sensor_streaming = stream_status == "ON"
         elif message_type == "acknowledgement":
             future = self._pending_ack.get(message_id)
             if future and not future.done():
@@ -229,6 +236,12 @@ class SerialHardware:
                 self._outputs["safeFlap"] = "HOME"
             elif command_name in {Command.UNSAFE_FLAP_HOME.value, Command.SORT_UNSAFE.value, Command.UNSAFE_FLAP_TEST.value}:
                 self._outputs["unsafeFlap"] = "HOME"
+            elif command_name == Command.SENSOR_STREAM_START.value:
+                self._sensor_streaming = True
+                self._sensor_interval_ms = int(normalized_payload.get("intervalMs", 1000))
+            elif command_name == Command.SENSOR_STREAM_STOP.value:
+                self._sensor_streaming = False
+                self._sensor_interval_ms = None
             return {"messageId": message_id, "acknowledgement": acknowledgement, "completion": result}
         except asyncio.TimeoutError as exc:
             raise HardwareError(f"{command_name} timed out") from exc
@@ -240,26 +253,32 @@ class SerialHardware:
         await self.command(Command.SET_SAFE_STATE)
         self._outputs.update({"pump": "OFF", "stepper": "DISABLED", "inletValve": "CLOSED", "safeFlap": "HOME", "unsafeFlap": "HOME"})
 
+    async def start_telemetry(self, rate_hz: float, *, force: bool = False) -> None:
+        interval_ms = max(50, int(1000 / max(rate_hz, 0.1)))
+        if not force and self._sensor_streaming and self._sensor_interval_ms == interval_ms:
+            return
+        await self.command(Command.SENSOR_STREAM_START, {"intervalMs": interval_ms})
+
+    async def stop_telemetry(self) -> None:
+        if self._sensor_streaming and self.connected:
+            await self.command(Command.SENSOR_STREAM_STOP)
+
     async def collect_sensors(self, duration: float, rate_hz: float, session_id: str, cycle_id: str) -> list[dict[str, Any]]:
         while not self._sensor_queue.empty():
             with contextlib.suppress(asyncio.QueueEmpty):
                 self._sensor_queue.get_nowait()
-        interval_ms = max(50, int(1000 / max(rate_hz, 0.1)))
-        await self.command(Command.SENSOR_STREAM_START, {"intervalMs": interval_ms}, session_id=session_id, cycle_id=cycle_id)
+        await self.start_telemetry(rate_hz)
         started = time.monotonic()
         samples: list[dict[str, Any]] = []
-        try:
-            while time.monotonic() - started < duration:
-                remaining = duration - (time.monotonic() - started)
-                try:
-                    sample = await asyncio.wait_for(self._sensor_queue.get(), timeout=min(2.5, max(0.1, remaining)))
-                    sample["elapsed"] = round(time.monotonic() - started, 3)
-                    samples.append(sample)
-                except asyncio.TimeoutError:
-                    continue
-        finally:
-            with contextlib.suppress(Exception):
-                await self.command(Command.SENSOR_STREAM_STOP, session_id=session_id, cycle_id=cycle_id)
+        while time.monotonic() - started < duration:
+            remaining = duration - (time.monotonic() - started)
+            try:
+                sample = await asyncio.wait_for(self._sensor_queue.get(), timeout=min(2.5, max(0.1, remaining)))
+                sample = dict(sample)
+                sample["elapsed"] = round(time.monotonic() - started, 3)
+                samples.append(sample)
+            except asyncio.TimeoutError:
+                continue
         return samples
 
     async def manual(self, command: str, parameters: dict[str, Any], operator: str) -> dict[str, Any]:

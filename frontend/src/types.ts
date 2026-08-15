@@ -15,6 +15,8 @@ export type State = {
     port: string;
     lastHeartbeatAgeSeconds?: number | null;
     latestSensorSample?: SensorSample | null;
+    sensorStreaming?: boolean;
+    sensorIntervalMs?: number | null;
     outputs: Record<string, string>;
   };
   vision: {
@@ -42,6 +44,8 @@ export type SensorSample = {
   temperature?: number | { value: number };
   humidity?: number | { value: number };
   elapsed?: number;
+  deviceMillis?: number;
+  sequence?: number;
 };
 
 export type Detection = {
@@ -67,4 +71,3 @@ export type Classification = {
 export type EventMessage = { sequence: number; topic: string; timestamp?: string; payload: any };
 
 export type ConfigurationPayload = { active: Record<string, any>; thresholds: Record<string, any>; pins: Record<string, any> };
-

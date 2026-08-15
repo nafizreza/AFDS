@@ -45,6 +45,8 @@ export function useAFDS() {
         const event: EventMessage = JSON.parse(message.data);
         setEvents((previous) => [event, ...previous].slice(0, 150));
         if (event.topic === "state") setState(event.payload);
+        if (event.topic === "classification") setState((previous) => ({ ...previous, lastClassification: event.payload }));
+        if (event.topic === "detection") setState((previous) => ({ ...previous, lastDetection: event.payload }));
         if (event.topic === "sensor_sample") setSamples((previous) => [...previous.slice(-179), event.payload]);
       };
       socket.onclose = () => {
