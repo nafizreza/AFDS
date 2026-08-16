@@ -17,7 +17,7 @@
   "feeder": {"stepsForward": 1600, "stepsReverse": 1600, "stepRate": 600, "settleMs": 450, "completionTimeoutSeconds": 18},
   "servos": {
     "inletValve": {"openAngle": 180, "closedAngle": 100, "settleMs": 700},
-    "safeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
+    "safeFlap": {"homeAngle": 70, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
     "unsafeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500}
   },
   "sampling": {"durationSeconds": 90, "targetRateHz": 1.0, "maximumGapSeconds": 3.0, "minimumSampleFraction": 0.9, "requiredChannels": ["mq3", "mq136", "ch2o", "temperature", "humidity"]},

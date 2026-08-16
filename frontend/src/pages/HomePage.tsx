@@ -196,7 +196,7 @@ export function HomePage({ state, events, samples, operator, run }: PageProps) {
 
   return <div className={`page overview-page immersive-overview ${state.state === "ACQUIRING" ? "sensor-active" : ""} ${resultTone}`}>
     <section className="overview-heading">
-      <div><div className="eyebrow"><span className="live-dot" /> AUTOMATIC INSPECTION</div><h1>Fruit inspection, made visible.</h1><p>One live view of the chamber, signals and decision—without the engineering clutter.</p></div>
+      <div><div className="eyebrow"><span className="live-dot" /> AUTOMATIC INSPECTION</div><h1>ML Based Fruit Adulterant Detection System with Automated Sorting Mechanism</h1><p>One live view of the chamber, signals and decision—without the engineering clutter.</p></div>
       <div className="overview-current"><span>NOW</span><strong>{stageName}</strong><small>{state.sessionId ? `Fruit ${state.cycleNumber} · automatic session` : "Awaiting an inspection session"}</small></div>
     </section>
 

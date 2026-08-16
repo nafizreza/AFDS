@@ -23,7 +23,7 @@
   },
   "servos": {
     "inletValve": {"openAngle": 180, "closedAngle": 100, "settleMs": 700},
-    "safeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
+    "safeFlap": {"homeAngle": 70, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
     "unsafeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500}
   },
   "sampling": {
