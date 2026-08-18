@@ -161,6 +161,7 @@ class SerialHardware:
         inlet = servos["inletValve"]
         safe = servos["safeFlap"]
         unsafe = servos["unsafeFlap"]
+        sorting_motion = servos.get("sortingMotion", {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4})
 
         if command_name == Command.VALVE_OPEN.value:
             result.setdefault("angle", result.get("openAngle", inlet["openAngle"]))
@@ -176,6 +177,11 @@ class SerialHardware:
             result.setdefault("homeAngle", safe["homeAngle"])
             result.setdefault("holdMs", safe["holdMs"])
             result.setdefault("settleMs", safe["settleMs"])
+            if command_name == Command.SORT_SAFE.value:
+                result.setdefault("oppositeHomeAngle", unsafe["homeAngle"])
+                result.setdefault("shakeOffsetDegrees", sorting_motion.get("offsetDegrees", 10))
+                result.setdefault("shakeCycles", sorting_motion.get("cycles", 4))
+                result.setdefault("shakeStepMs", sorting_motion.get("intervalMs", 90))
         elif command_name == Command.SAFE_FLAP_HOME.value:
             result.setdefault("angle", result.get("homeAngle", safe["homeAngle"]))
             result.setdefault("settleMs", safe["settleMs"])
@@ -184,6 +190,11 @@ class SerialHardware:
             result.setdefault("homeAngle", unsafe["homeAngle"])
             result.setdefault("holdMs", unsafe["holdMs"])
             result.setdefault("settleMs", unsafe["settleMs"])
+            if command_name == Command.SORT_UNSAFE.value:
+                result.setdefault("oppositeHomeAngle", safe["homeAngle"])
+                result.setdefault("shakeOffsetDegrees", sorting_motion.get("offsetDegrees", 10))
+                result.setdefault("shakeCycles", sorting_motion.get("cycles", 4))
+                result.setdefault("shakeStepMs", sorting_motion.get("intervalMs", 90))
         elif command_name == Command.UNSAFE_FLAP_HOME.value:
             result.setdefault("angle", result.get("homeAngle", unsafe["homeAngle"]))
             result.setdefault("settleMs", unsafe["settleMs"])
@@ -232,9 +243,12 @@ class SerialHardware:
                 self._outputs["inletValve"] = "CLOSED"
             elif command_name in {Command.STEPPER_STOP.value, Command.STEPPER_DISABLE.value, Command.FEED_ONE.value, Command.STEPPER_MOVE.value}:
                 self._outputs["stepper"] = "DISABLED"
-            elif command_name in {Command.SAFE_FLAP_HOME.value, Command.SORT_SAFE.value, Command.SAFE_FLAP_TEST.value}:
+            elif command_name in {Command.SORT_SAFE.value, Command.SORT_UNSAFE.value}:
                 self._outputs["safeFlap"] = "HOME"
-            elif command_name in {Command.UNSAFE_FLAP_HOME.value, Command.SORT_UNSAFE.value, Command.UNSAFE_FLAP_TEST.value}:
+                self._outputs["unsafeFlap"] = "HOME"
+            elif command_name in {Command.SAFE_FLAP_HOME.value, Command.SAFE_FLAP_TEST.value}:
+                self._outputs["safeFlap"] = "HOME"
+            elif command_name in {Command.UNSAFE_FLAP_HOME.value, Command.UNSAFE_FLAP_TEST.value}:
                 self._outputs["unsafeFlap"] = "HOME"
             elif command_name == Command.SENSOR_STREAM_START.value:
                 self._sensor_streaming = True

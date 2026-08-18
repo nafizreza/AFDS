@@ -51,8 +51,11 @@ export function Workflow({ state }: { state: State }) {
 
 function value(sample: SensorSample | null | undefined, key: keyof SensorSample): number | null {
   const raw = sample?.[key];
-  if (typeof raw === "number") return raw;
-  if (raw && typeof raw === "object" && "value" in raw) return Number(raw.value);
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (raw && typeof raw === "object" && "value" in raw) {
+    const reading = Number(raw.value);
+    return Number.isFinite(reading) ? reading : null;
+  }
   return null;
 }
 
@@ -65,6 +68,42 @@ export function SensorStrip({ sample }: { sample?: SensorSample | null }) {
     const reading = value(sample, key);
     return <div className="sensor-tile" key={key}><span>{label}</span><strong>{reading === null ? "—" : reading.toFixed(key === "ch2o" ? 3 : 1)}</strong><small>{unit}</small><i style={{ width: `${reading === null ? 0 : Math.min(100, Math.abs(reading) / (key === "ch2o" ? .0025 : key === "temperature" ? .5 : 12))}%` }} /></div>;
   })}</div>;
+}
+
+const GAS_CHANNELS: Array<[keyof SensorSample, string, string, number, string]> = [
+  ["mq3", "MQ-3", "ADC", 0, "Alcohol / carbide response"],
+  ["mq136", "MQ-136", "ADC", 0, "Sulfur / spoilage response"],
+  ["ch2o", "CH₂O", "ppm", 3, "Formaldehyde channel"],
+];
+
+function gasPath(samples: SensorSample[], key: keyof SensorSample, width = 720, height = 56) {
+  const readings = samples.map((sample) => value(sample, key)).filter((reading): reading is number => reading !== null);
+  if (readings.length < 2) return "";
+  const min = Math.min(...readings), max = Math.max(...readings);
+  const range = max - min;
+  return readings.map((reading, index) => {
+    const x = (index / (readings.length - 1)) * width;
+    const y = range === 0 ? height / 2 : height - 5 - ((reading - min) / range) * (height - 10);
+    return `${index ? "L" : "M"} ${x} ${y}`;
+  }).join(" ");
+}
+
+export function GasSensorChartStack({ samples, latest }: { samples: SensorSample[]; latest?: SensorSample | null }) {
+  const view = samples.slice(-60);
+  const current = latest || view.at(-1);
+  return <div className="gas-chart-stack" aria-label="Independent live gas sensor charts">
+    {GAS_CHANNELS.map(([key, label, unit, precision, hint]) => {
+      const reading = value(current, key);
+      return <article className={`gas-chart-row gas-${String(key)}`} key={String(key)}>
+        <div className="gas-chart-label"><span><i />{label}</span><small>{hint}</small></div>
+        <svg viewBox="0 0 720 56" preserveAspectRatio="none" role="img" aria-label={`${label} independent live trend`}>
+          <path className="gas-gridline" d="M0 14H720M0 28H720M0 42H720" />
+          <path className="gas-trace" d={gasPath(view, key)} />
+        </svg>
+        <div className="gas-chart-reading"><strong>{reading === null ? "—" : reading.toFixed(precision)}</strong><small>{unit}</small></div>
+      </article>;
+    })}
+  </div>;
 }
 
 export function ClassificationCard({ result }: { result?: Classification | null }) {
@@ -93,4 +132,3 @@ export function Mechanism({ state }: { state: State }) {
     <div className={`pump ${active === "PURGING" ? "on" : ""}`}><i /><span>PURGE</span></div>
   </div>;
 }
-

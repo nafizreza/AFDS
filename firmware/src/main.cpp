@@ -30,8 +30,57 @@ void serviceRuntime() {
   }
 }
 
+void responsiveDelay(uint32_t durationMs) {
+  const uint32_t startedAt = millis();
+  while (millis() - startedAt < durationMs) {
+    serviceRuntime();
+    delay(5);
+  }
+}
+
+void writeSortingFlaps(bool safeRoute, int selectedAngle, int oppositeAngle) {
+  if (safeRoute) {
+    actuators.safeFlap(selectedAngle);
+    actuators.rejectFlap(oppositeAngle);
+  } else {
+    actuators.rejectFlap(selectedAngle);
+    actuators.safeFlap(oppositeAngle);
+  }
+}
+
+void oscillateOppositeFlap(bool safeRoute, int dropAngle, int oppositeHomeAngle,
+                           int offsetDegrees, uint8_t cycles, uint32_t stepMs) {
+  const int oppositeShakeAngle = constrain(oppositeHomeAngle + offsetDegrees, 0, 180);
+  for (uint8_t cycle = 0; cycle < cycles; ++cycle) {
+    writeSortingFlaps(safeRoute, dropAngle, oppositeShakeAngle);
+    responsiveDelay(stepMs);
+    writeSortingFlaps(safeRoute, dropAngle, oppositeHomeAngle);
+    responsiveDelay(stepMs);
+  }
+}
+
 int payloadInt(const CommandFrame& frame, const char* key, int fallback) {
   return frame.payload[key].is<int>() ? frame.payload[key].as<int>() : fallback;
+}
+
+void runSortingSequence(const CommandFrame& frame, bool safeRoute) {
+  const int dropAngle = payloadInt(
+      frame, "angle", safeRoute ? Defaults::SAFE_DROP_ANGLE : Defaults::UNSAFE_DROP_ANGLE);
+  const int selectedHomeAngle = payloadInt(
+      frame, "homeAngle", safeRoute ? Defaults::SAFE_HOME_ANGLE : Defaults::UNSAFE_HOME_ANGLE);
+  const int oppositeHomeAngle = payloadInt(
+      frame, "oppositeHomeAngle", safeRoute ? Defaults::UNSAFE_HOME_ANGLE : Defaults::SAFE_HOME_ANGLE);
+  const int offsetDegrees = constrain(
+      payloadInt(frame, "shakeOffsetDegrees", Defaults::FLAP_SHAKE_OFFSET_DEGREES), 1, 45);
+  const uint8_t cycles = static_cast<uint8_t>(constrain(
+      payloadInt(frame, "shakeCycles", Defaults::FLAP_SHAKE_CYCLES), 1, 10));
+  const uint32_t stepMs = static_cast<uint32_t>(constrain(
+      payloadInt(frame, "shakeStepMs", Defaults::FLAP_SHAKE_STEP_MS), 20, 1000));
+
+  writeSortingFlaps(safeRoute, dropAngle, oppositeHomeAngle);
+  responsiveDelay(payloadInt(frame, "holdMs", Defaults::FLAP_HOLD_MS));
+  oscillateOppositeFlap(safeRoute, dropAngle, oppositeHomeAngle, offsetDegrees, cycles, stepMs);
+  writeSortingFlaps(safeRoute, selectedHomeAngle, oppositeHomeAngle);
 }
 
 void sampleAndSend(const String& messageId, const String& sessionId, const String& cycleId) {
@@ -92,17 +141,25 @@ void handleCommand(const CommandFrame& frame) {
     actuators.stopStepper(); completeSimple(frame, "STEPPER_STOPPED");
   } else if (command == "STEPPER_DISABLE") {
     actuators.disableStepper(); completeSimple(frame, "STEPPER_DISABLED");
-  } else if (command == "SAFE_FLAP_TEST" || command == "SORT_SAFE") {
+  } else if (command == "SAFE_FLAP_TEST") {
     actuators.safeFlap(payloadInt(frame, "angle", Defaults::SAFE_DROP_ANGLE));
-    delay(payloadInt(frame, "holdMs", Defaults::FLAP_HOLD_MS));
+    responsiveDelay(payloadInt(frame, "holdMs", Defaults::FLAP_HOLD_MS));
     actuators.safeFlap(payloadInt(frame, "homeAngle", Defaults::SAFE_HOME_ANGLE));
-    completeSimple(frame, command == "SORT_SAFE" ? "SORT_SAFE_COMPLETED" : "SAFE_FLAP_COMPLETED",
+    completeSimple(frame, "SAFE_FLAP_COMPLETED",
                    payloadInt(frame, "settleMs", Defaults::FLAP_SETTLE_MS));
-  } else if (command == "UNSAFE_FLAP_TEST" || command == "SORT_UNSAFE") {
+  } else if (command == "UNSAFE_FLAP_TEST") {
     actuators.rejectFlap(payloadInt(frame, "angle", Defaults::UNSAFE_DROP_ANGLE));
-    delay(payloadInt(frame, "holdMs", Defaults::FLAP_HOLD_MS));
+    responsiveDelay(payloadInt(frame, "holdMs", Defaults::FLAP_HOLD_MS));
     actuators.rejectFlap(payloadInt(frame, "homeAngle", Defaults::UNSAFE_HOME_ANGLE));
-    completeSimple(frame, command == "SORT_UNSAFE" ? "SORT_UNSAFE_COMPLETED" : "UNSAFE_FLAP_COMPLETED",
+    completeSimple(frame, "UNSAFE_FLAP_COMPLETED",
+                   payloadInt(frame, "settleMs", Defaults::FLAP_SETTLE_MS));
+  } else if (command == "SORT_SAFE") {
+    runSortingSequence(frame, true);
+    completeSimple(frame, "SORT_SAFE_COMPLETED",
+                   payloadInt(frame, "settleMs", Defaults::FLAP_SETTLE_MS));
+  } else if (command == "SORT_UNSAFE") {
+    runSortingSequence(frame, false);
+    completeSimple(frame, "SORT_UNSAFE_COMPLETED",
                    payloadInt(frame, "settleMs", Defaults::FLAP_SETTLE_MS));
   } else if (command == "SAFE_FLAP_HOME") {
     actuators.safeFlap(payloadInt(frame, "angle", Defaults::SAFE_HOME_ANGLE)); completeSimple(frame, "SAFE_FLAP_HOME_COMPLETED", Defaults::FLAP_SETTLE_MS);

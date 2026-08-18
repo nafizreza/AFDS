@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..domain.types import ConfigurationSaveRequest, ManualCommandRequest, OperatorRequest, ResetConfigurationRequest, StateVersionRequest
@@ -109,6 +109,13 @@ def create_router(controller: AFDSController) -> APIRouter:
     async def camera_stream() -> StreamingResponse:
         return StreamingResponse(controller.vision.mjpeg(), media_type="multipart/x-mixed-replace; boundary=frame")
 
+    @router.get("/camera/inspection.jpg")
+    async def inspection_snapshot() -> Response:
+        image = controller.vision.inspection_jpeg()
+        if image is None:
+            return Response(status_code=404)
+        return Response(content=image, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
     @router.websocket("/ws")
     async def websocket(websocket: WebSocket) -> None:
         await websocket.accept()
@@ -124,4 +131,3 @@ def create_router(controller: AFDSController) -> APIRouter:
             controller.events.unsubscribe(queue)
 
     return router
-

@@ -13,6 +13,7 @@ def adapter() -> SerialHardware:
     config["servos"]["inletValve"].update({"openAngle": 17, "closedAngle": 103})
     config["servos"]["safeFlap"].update({"homeAngle": 61, "dropAngle": 9})
     config["servos"]["unsafeFlap"].update({"homeAngle": 62, "dropAngle": 11})
+    config["servos"]["sortingMotion"].update({"offsetDegrees": 12, "intervalMs": 105, "cycles": 6})
     return SerialHardware(config)
 
 
@@ -24,8 +25,17 @@ def test_active_valve_angles_are_translated_to_firmware_payload():
 
 def test_active_flap_and_safe_state_angles_are_translated():
     hardware = adapter()
-    assert hardware._payload_with_active_defaults(Command.SORT_SAFE.value, {})["angle"] == 9
-    assert hardware._payload_with_active_defaults(Command.SORT_UNSAFE.value, {})["angle"] == 11
+    safe_sort = hardware._payload_with_active_defaults(Command.SORT_SAFE.value, {})
+    unsafe_sort = hardware._payload_with_active_defaults(Command.SORT_UNSAFE.value, {})
+    assert safe_sort["angle"] == 9
+    assert safe_sort["homeAngle"] == 61
+    assert safe_sort["oppositeHomeAngle"] == 62
+    assert unsafe_sort["angle"] == 11
+    assert unsafe_sort["homeAngle"] == 62
+    assert unsafe_sort["oppositeHomeAngle"] == 61
+    assert safe_sort["shakeOffsetDegrees"] == unsafe_sort["shakeOffsetDegrees"] == 12
+    assert safe_sort["shakeCycles"] == unsafe_sort["shakeCycles"] == 6
+    assert safe_sort["shakeStepMs"] == unsafe_sort["shakeStepMs"] == 105
     safe = hardware._payload_with_active_defaults(Command.SET_SAFE_STATE.value, {})
     assert safe["valveClosedAngle"] == 103
     assert safe["safeHomeAngle"] == 61
@@ -36,4 +46,11 @@ def test_explicit_maintenance_value_overrides_active_config():
     hardware = adapter()
     payload = hardware._payload_with_active_defaults(Command.VALVE_OPEN.value, {"angle": 42})
     assert payload["angle"] == 42
-
+    sort_payload = hardware._payload_with_active_defaults(
+        Command.SORT_SAFE.value,
+        {"oppositeHomeAngle": 27, "shakeOffsetDegrees": 8, "shakeCycles": 3, "shakeStepMs": 75},
+    )
+    assert sort_payload["oppositeHomeAngle"] == 27
+    assert sort_payload["shakeOffsetDegrees"] == 8
+    assert sort_payload["shakeCycles"] == 3
+    assert sort_payload["shakeStepMs"] == 75

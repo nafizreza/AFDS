@@ -6,3 +6,4 @@ Before powering actuators, verify relay polarity, common ground, external servo 
 
 The firmware applies a safe startup state: pump off, stepper disabled, inlet closed, and both flaps home. GPIO assignments in `include/board_config.h` must match `config/hardware_pins.json`.
 
+During automatic safe or unsafe sorting, the selected flap moves to and remains fixed at its configured drop angle. The opposite flap alternates between its home angle and the configured positive offset for the configured number of cycles and interval. Both flaps then return to their configured home angles. The Maintenance sorting-route buttons reproduce this complete motion, while the individual flap tests retain the standard drop-hold-home movement.

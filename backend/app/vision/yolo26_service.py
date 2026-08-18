@@ -25,6 +25,9 @@ class Yolo26VisionService:
         self._ready = False
         self._last_error: str | None = None
         self._latest_jpeg: bytes | None = None
+        self._inspection_jpeg: bytes | None = None
+        self._inspection_frame_sequence: int | None = None
+        self._raw_frames: dict[int, bytes] = {}
         self._latest_result: dict[str, Any] | None = None
         self._frame_sequence = 0
         self.model_checksum: str | None = None
@@ -38,6 +41,11 @@ class Yolo26VisionService:
             "modelChecksum": self.model_checksum,
             "lastError": self._last_error,
             "frameSequence": self._frame_sequence,
+            "inspectionFrameSequence": self._inspection_frame_sequence,
+            "inspectionSnapshotUrl": (
+                f"/api/v1/camera/inspection.jpg?frame={self._inspection_frame_sequence}"
+                if self._inspection_frame_sequence is not None else None
+            ),
             "latestDetection": self._latest_result,
         }
 
@@ -80,6 +88,10 @@ class Yolo26VisionService:
             self._camera = None
             self._model = None
             self._ready = False
+            self._latest_jpeg = None
+            self._inspection_jpeg = None
+            self._inspection_frame_sequence = None
+            self._raw_frames.clear()
 
     @staticmethod
     def _fruit_name(raw: str) -> str | None:
@@ -126,13 +138,19 @@ class Yolo26VisionService:
                         "boundingBox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
                         "frame": {"width": width, "height": height},
                     })
+            self._frame_sequence += 1
+            frame_sequence = self._frame_sequence
+            raw_ok, raw_encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            if raw_ok:
+                self._raw_frames[frame_sequence] = raw_encoded.tobytes()
+                for stale_sequence in sorted(self._raw_frames)[:-12]:
+                    self._raw_frames.pop(stale_sequence, None)
             annotated = result.plot()
             ok, encoded = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if ok:
                 self._latest_jpeg = encoded.tobytes()
-            self._frame_sequence += 1
             payload = {
-                "frameSequence": self._frame_sequence,
+                "frameSequence": frame_sequence,
                 "detections": detections,
                 "count": len(detections),
                 "latencyMs": round((time.perf_counter() - started) * 1000, 1),
@@ -157,12 +175,27 @@ class Yolo26VisionService:
                     selected = current
                     stable = 1
                 if stable >= required:
-                    return {**result, "selected": current, "stableFrames": stable}
+                    frame_sequence = int(result["frameSequence"])
+                    with self._lock:
+                        snapshot = self._raw_frames.get(frame_sequence)
+                        if snapshot:
+                            self._inspection_jpeg = snapshot
+                            self._inspection_frame_sequence = frame_sequence
+                    return {
+                        **result,
+                        "selected": current,
+                        "stableFrames": stable,
+                        "snapshotUrl": f"/api/v1/camera/inspection.jpg?frame={frame_sequence}",
+                    }
             else:
                 stable = 0
                 selected = None
             await asyncio.sleep(0.08)
         return None
+
+    def inspection_jpeg(self) -> bytes | None:
+        with self._lock:
+            return self._inspection_jpeg
 
     async def mjpeg(self):
         interval = 1 / max(1, int(self.config.get("streamFps", 12)))
@@ -174,4 +207,3 @@ class Yolo26VisionService:
             except Exception:
                 await asyncio.sleep(0.5)
             await asyncio.sleep(interval)
-

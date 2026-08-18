@@ -15,6 +15,9 @@ class ConfigurationError(ValueError):
     pass
 
 
+SORTING_MOTION_DEFAULTS = {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4}
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -25,6 +28,14 @@ def _read_json(path: Path) -> dict[str, Any]:
 def checksum(values: dict[str, Any]) -> str:
     payload = json.dumps(values, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
+
+
+def normalize_config(values: dict[str, Any]) -> dict[str, Any]:
+    normalized = deepcopy(values)
+    sorting_motion = normalized.setdefault("servos", {}).setdefault("sortingMotion", {})
+    for key, value in SORTING_MOTION_DEFAULTS.items():
+        sorting_motion.setdefault(key, value)
+    return normalized
 
 
 def validate_config(values: dict[str, Any]) -> list[str]:
@@ -62,6 +73,10 @@ def validate_config(values: dict[str, Any]) -> list[str]:
         for key in ("openAngle", "closedAngle", "homeAngle", "dropAngle"):
             if key in group:
                 within(f"servos.{name}.{key}", group[key], 0, 180)
+    sorting_motion = servos.get("sortingMotion", SORTING_MOTION_DEFAULTS)
+    within("servos.sortingMotion.offsetDegrees", sorting_motion.get("offsetDegrees"), 1, 45)
+    within("servos.sortingMotion.intervalMs", sorting_motion.get("intervalMs"), 20, 1000)
+    within("servos.sortingMotion.cycles", sorting_motion.get("cycles"), 1, 10)
     return errors
 
 
@@ -77,7 +92,7 @@ class ConfigurationService:
         self.thresholds_path = self.config_dir / "thresholds.json"
         self.pins_path = self.config_dir / "hardware_pins.json"
         source = self.active_path if self.active_path.exists() else self.reset_path
-        self._active = _read_json(source)
+        self._active = normalize_config(_read_json(source))
         errors = validate_config(self._active)
         if errors:
             raise ConfigurationError("; ".join(errors))
@@ -95,6 +110,7 @@ class ConfigurationService:
         return _read_json(self.pins_path)
 
     def save(self, values: dict[str, Any]) -> dict[str, Any]:
+        values = normalize_config(values)
         errors = validate_config(values)
         if errors:
             raise ConfigurationError("; ".join(errors))
@@ -110,10 +126,10 @@ class ConfigurationService:
         return self.save(_read_json(path))
 
     def set_reset_baseline(self, values: dict[str, Any]) -> None:
+        values = normalize_config(values)
         errors = validate_config(values)
         if errors:
             raise ConfigurationError("; ".join(errors))
         temporary = self.reset_path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(values, indent=2) + "\n", encoding="utf-8")
         temporary.replace(self.reset_path)
-

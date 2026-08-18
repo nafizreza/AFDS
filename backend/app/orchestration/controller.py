@@ -241,6 +241,17 @@ class AFDSController:
 
         await self._transition(SystemState.CLASSIFYING)
         classification = self.classifier.classify(selected["fruitClass"], samples).to_dict()
+        snapshot_url = detection.get("snapshotUrl")
+        classification["visionEvidence"] = {
+            "layer": 1,
+            "name": "YOLO26s fruit identification",
+            "fruitClass": selected["fruitClass"],
+            "confidencePercent": round(float(selected["confidence"]) * 100.0, 1),
+            "frameSequence": detection.get("frameSequence"),
+            "snapshotUrl": snapshot_url,
+            "demo": False,
+        }
+        classification["demoFusion"]["image"]["snapshotUrl"] = snapshot_url
         self.last_classification = classification
         self.database.update_cycle(self.cycle_id, classification=classification, final_condition=classification["condition"], route=classification["route"])
         await self._publish("classification", classification)
@@ -253,7 +264,7 @@ class AFDSController:
             await self._transition(SystemState.SORTING_UNSAFE)
             await self.hardware.command(Command.SORT_UNSAFE, config["servos"]["unsafeFlap"], session_id=self.session_id, cycle_id=self.cycle_id)
             self._summary["unsafe"] += 1
-            if classification["condition"] == "INCONCLUSIVE":
+            if classification["quality"] == "REVIEW_REQUIRED":
                 self._summary["inconclusive"] += 1
 
         await self._transition(SystemState.PURGING)

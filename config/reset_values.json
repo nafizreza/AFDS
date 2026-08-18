@@ -16,13 +16,13 @@
   },
   "feeder": {"stepsForward": 1600, "stepsReverse": 1600, "stepRate": 600, "settleMs": 450, "completionTimeoutSeconds": 18},
   "servos": {
-    "inletValve": {"openAngle": 180, "closedAngle": 100, "settleMs": 700},
-    "safeFlap": {"homeAngle": 70, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
-    "unsafeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500}
+    "inletValve": {"openAngle": 0, "closedAngle": 90, "settleMs": 700},
+    "safeFlap": {"homeAngle": 0, "dropAngle": 85, "holdMs": 1500, "settleMs": 500},
+    "unsafeFlap": {"homeAngle": 0, "dropAngle":85, "holdMs": 1500, "settleMs": 500},
+    "sortingMotion": {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4}
   },
   "sampling": {"durationSeconds": 90, "targetRateHz": 1.0, "maximumGapSeconds": 3.0, "minimumSampleFraction": 0.9, "requiredChannels": ["mq3", "mq136", "ch2o", "temperature", "humidity"]},
   "purge": {"durationSeconds": 30, "maximumSeconds": 180},
   "protocol": {"baudRate": 115200, "protocolVersion": "1.0", "heartbeatTimeoutSeconds": 4, "ackTimeoutSeconds": 2, "completionTimeoutSeconds": 20},
   "safety": {"noFruitAutomaticRetries": 0, "inconclusiveRoute": "UNSAFE"}
 }
-

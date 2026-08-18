@@ -67,4 +67,3 @@ def decode(data: bytes | str) -> dict[str, Any]:
     if not isinstance(value, dict) or "type" not in value or "protocolVersion" not in value:
         raise ValueError("Invalid protocol envelope")
     return value
-

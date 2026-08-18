@@ -59,6 +59,18 @@ export type Detection = {
   latencyMs: number;
   detections: Array<{ fruitClass: string; rawClass: string; confidence: number; boundingBox: Record<string, number> }>;
   selected?: { fruitClass: string; rawClass: string; confidence: number };
+  snapshotUrl?: string;
+};
+
+export type EngineeredFeatures = {
+  initial: number;
+  peak: number;
+  average: number;
+  final: number;
+  delta: number;
+  slope: number;
+  duration_seconds: number;
+  sample_count: number;
 };
 
 export type Classification = {
@@ -68,7 +80,26 @@ export type Classification = {
   valid: boolean;
   quality: string;
   commissioned: boolean;
-  evidence: Record<string, { channel: string; adjusted_mean: number; threshold: number; threshold_index_percent: number; matched: boolean }>;
+  evidence: Record<string, { channel: string; raw_mean?: number; adjusted_mean: number; feature_score?: number; threshold: number; threshold_index_percent: number; matched: boolean }>;
+  engineered_features?: Record<string, EngineeredFeatures>;
+  overall_confidence_percent?: number;
+  confidence_basis?: string;
+  visionEvidence?: {
+    layer: number;
+    name: string;
+    fruitClass: string;
+    confidencePercent: number;
+    frameSequence?: number;
+    snapshotUrl?: string;
+    demo: boolean;
+  };
+  demoFusion?: {
+    mode: string;
+    overallConfidencePercent: number;
+    sensor: { layer: number; name: string; source: string; weightPercent: number; contributionPercent: number; demo: boolean };
+    image: { layer: number; name: string; source: string; weightPercent: number; contributionPercent: number; predictedClass: string; snapshotUrl?: string | null; demo: boolean };
+    formula: string;
+  };
   reasons: string[];
   disclaimer: string;
 };

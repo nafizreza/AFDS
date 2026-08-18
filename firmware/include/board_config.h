@@ -34,6 +34,9 @@ constexpr int UNSAFE_DROP_ANGLE = 0;
 constexpr uint32_t SERVO_SETTLE_MS = 700;
 constexpr uint32_t FLAP_HOLD_MS = 1500;
 constexpr uint32_t FLAP_SETTLE_MS = 500;
+constexpr uint8_t FLAP_SHAKE_CYCLES = 4;
+constexpr int FLAP_SHAKE_OFFSET_DEGREES = 10;
+constexpr uint32_t FLAP_SHAKE_STEP_MS = 90;
 constexpr uint32_t MAX_STEPPER_STEPS = 50000;
 constexpr uint32_t MAX_PUMP_MS = 900000;
 }  // namespace Defaults

@@ -22,9 +22,10 @@
     "completionTimeoutSeconds": 18
   },
   "servos": {
-    "inletValve": {"openAngle": 180, "closedAngle": 100, "settleMs": 700},
-    "safeFlap": {"homeAngle": 70, "dropAngle": 0, "holdMs": 1500, "settleMs": 500},
-    "unsafeFlap": {"homeAngle": 60, "dropAngle": 0, "holdMs": 1500, "settleMs": 500}
+    "inletValve": {"openAngle": 0, "closedAngle": 90, "settleMs": 700},
+    "safeFlap": {"homeAngle": 0, "dropAngle": 85, "holdMs": 1500, "settleMs": 500},
+    "unsafeFlap": {"homeAngle": 0, "dropAngle": 85, "holdMs": 1500, "settleMs": 500},
+    "sortingMotion": {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4}
   },
   "sampling": {
     "durationSeconds": 90,
@@ -43,4 +44,3 @@
   },
   "safety": {"noFruitAutomaticRetries": 0, "inconclusiveRoute": "UNSAFE"}
 }
-
