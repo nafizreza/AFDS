@@ -15,17 +15,17 @@
     "roi": {"x": 0.16, "y": 0.12, "width": 0.68, "height": 0.76}
   },
   "feeder": {
-    "stepsForward": 1600,
-    "stepsReverse": 1600,
-    "stepRate": 600,
+    "stepsForward": 9000,
+    "stepsReverse": 9000,
+    "stepRate": 1200,
     "settleMs": 450,
     "completionTimeoutSeconds": 18
   },
   "servos": {
-    "inletValve": {"openAngle": 0, "closedAngle": 90, "settleMs": 700},
-    "safeFlap": {"homeAngle": 0, "dropAngle": 85, "holdMs": 1500, "settleMs": 500},
-    "unsafeFlap": {"homeAngle": 0, "dropAngle": 85, "holdMs": 1500, "settleMs": 500},
-    "sortingMotion": {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4}
+    "inletValve": {"openAngle": 0, "closedAngle": 103, "settleMs": 700},
+    "safeFlap": {"homeAngle": 0, "dropAngle": 80, "holdMs": 1500, "settleMs": 500},
+    "unsafeFlap": {"homeAngle": 0, "dropAngle": 80, "holdMs": 1500, "settleMs": 500},
+    "sortingMotion": {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4, "returnHomeDelayMs": 500}
   },
   "sampling": {
     "durationSeconds": 90,

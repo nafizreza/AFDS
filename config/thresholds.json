@@ -1,15 +1,15 @@
 {
   "schemaVersion": "1.0",
-  "profileVersion": "research-thresholds-1.0.0",
+  "profileVersion": "direct-thresholds-1.0.0",
   "commissioned": false,
-  "disclaimer": "Threshold indices are research screening scores, not chemical concentration measurements.",
+  "disclaimer": "Direct sensor-average threshold screening for demonstration; not a laboratory measurement.",
   "profiles": {
     "DEFAULT": {
-      "formalin": {"channel": "ch2o", "warning": 0.08, "threshold": 0.14, "danger": 0.24, "baselineAdjusted": true},
-      "carbide": {"channel": "mq3", "warning": 450, "threshold": 700, "danger": 1200, "baselineAdjusted": true},
-      "rotten": {"channel": "mq136", "warning": 350, "threshold": 600, "danger": 1000, "baselineAdjusted": true},
-      "environment": {"temperatureMin": 10, "temperatureMax": 45, "humidityMin": 10, "humidityMax": 95}
+      "formalin": {"channel": "ch2o", "threshold": 0.1},
+      "carbide": {"channel": "mq3", "threshold": 1000},
+      "rotten": {"channel": "mq136", "threshold": 10000}
     }
+
+    
   }
 }
-

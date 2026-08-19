@@ -12,6 +12,29 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+async function sensorCaptureCsv(operator: string, version: number, durationSeconds: number, targetRateHz: number) {
+  const response = await fetch(`${API}/maintenance/sensor-capture.csv`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operator, expectedStateVersion: version, durationSeconds, targetRateHz }),
+  });
+  if (!response.ok) {
+    let message = "Sensor capture failed";
+    try {
+      const payload = await response.json();
+      message = payload?.error?.message || payload?.detail || message;
+    } catch { /* The backend returned a non-JSON error. */ }
+    throw new Error(message);
+  }
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || "afds_sensor_capture.csv";
+  return {
+    blob: await response.blob(),
+    filename,
+    sampleCount: Number(response.headers.get("X-AFDS-Sample-Count") || 0),
+  };
+}
+
 export const api = {
   state: () => request<State>("/state"),
   initialize: (operator: string, version: number) => request<State>("/system/initialize", { method: "POST", body: JSON.stringify({ operator, expectedStateVersion: version }) }),
@@ -22,9 +45,9 @@ export const api = {
   enter: (mode: "manual" | "maintenance", operator: string, version: number) => request<State>(`/${mode}/enter`, { method: "POST", body: JSON.stringify({ operator, expectedStateVersion: version }) }),
   exit: (version: number) => request<State>("/control/exit", { method: "POST", body: JSON.stringify({ expectedStateVersion: version }) }),
   command: (scope: "manual" | "maintenance", operator: string, version: number, command: string, parameters: Record<string, unknown> = {}) => request<any>(`/${scope}/command`, { method: "POST", body: JSON.stringify({ operator, expectedStateVersion: version, command, parameters }) }),
+  sensorCaptureCsv,
   configuration: () => request<ConfigurationPayload>("/configuration"),
   saveConfiguration: (operator: string, version: number, values: Record<string, any>) => request<ConfigurationPayload>("/configuration/save", { method: "POST", body: JSON.stringify({ operator, expectedStateVersion: version, description: "Dashboard configuration update", values }) }),
   resetConfiguration: (operator: string, version: number, source = "reset_values") => request<ConfigurationPayload>("/configuration/reset", { method: "POST", body: JSON.stringify({ operator, expectedStateVersion: version, source }) }),
   history: () => request<any>("/history?limit=100"),
 };
-

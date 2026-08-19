@@ -76,10 +76,13 @@ void runSortingSequence(const CommandFrame& frame, bool safeRoute) {
       payloadInt(frame, "shakeCycles", Defaults::FLAP_SHAKE_CYCLES), 1, 10));
   const uint32_t stepMs = static_cast<uint32_t>(constrain(
       payloadInt(frame, "shakeStepMs", Defaults::FLAP_SHAKE_STEP_MS), 20, 1000));
+  const uint32_t returnHomeDelayMs = static_cast<uint32_t>(constrain(
+      payloadInt(frame, "returnHomeDelayMs", Defaults::FLAP_RETURN_HOME_DELAY_MS), 0, 5000));
 
   writeSortingFlaps(safeRoute, dropAngle, oppositeHomeAngle);
   responsiveDelay(payloadInt(frame, "holdMs", Defaults::FLAP_HOLD_MS));
   oscillateOppositeFlap(safeRoute, dropAngle, oppositeHomeAngle, offsetDegrees, cycles, stepMs);
+  responsiveDelay(returnHomeDelayMs);
   writeSortingFlaps(safeRoute, selectedHomeAngle, oppositeHomeAngle);
 }
 

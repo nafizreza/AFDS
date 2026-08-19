@@ -7,8 +7,9 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..domain.types import ConfigurationSaveRequest, ManualCommandRequest, OperatorRequest, ResetConfigurationRequest, StateVersionRequest
+from ..domain.types import ConfigurationSaveRequest, ManualCommandRequest, OperatorRequest, ResetConfigurationRequest, SensorCaptureRequest, StateVersionRequest
 from ..orchestration.controller import AFDSController
+from ..services.sensor_csv import build_sensor_capture_csv
 
 
 class RuntimeInfo(BaseModel):
@@ -84,6 +85,26 @@ def create_router(controller: AFDSController) -> APIRouter:
     @router.post("/maintenance/command")
     async def manual_command(request: ManualCommandRequest) -> dict[str, Any]:
         return await controller.manual_command(request.operator, request.expected_state_version, request.command, request.parameters)
+
+    @router.post("/maintenance/sensor-capture.csv")
+    async def maintenance_sensor_capture(request: SensorCaptureRequest) -> Response:
+        capture = await controller.capture_maintenance_sensors(
+            request.operator,
+            request.expected_state_version,
+            request.duration_seconds,
+            request.target_rate_hz,
+        )
+        content, filename = build_sensor_capture_csv(capture)
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+                "X-AFDS-Sample-Count": str(capture["sampleCount"]),
+                "X-AFDS-Capture-Id": str(capture["captureId"]),
+            },
+        )
 
     @router.get("/configuration")
     async def configuration() -> dict[str, Any]:

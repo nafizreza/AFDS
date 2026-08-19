@@ -63,6 +63,9 @@ class ThresholdResult:
         result = asdict(self)
         result["condition"] = self.condition.value
         result["route"] = self.route.value
+        # The dashboard/controller API contract uses camelCase for this nested
+        # result while the Python dataclass keeps a conventional snake_case name.
+        result["demoFusion"] = result.pop("demo_fusion")
         return result
 
 
@@ -103,20 +106,6 @@ class ThresholdClassifier:
             duration_seconds=round(duration, 3),
             sample_count=len(values),
         )
-
-    @staticmethod
-    def _feature_score(features: EngineeredFeatures, baseline: float, threshold: float) -> float:
-        initial = max(0.0, features.initial - baseline)
-        peak = max(0.0, features.peak - baseline)
-        average = max(0.0, features.average - baseline)
-        final = max(0.0, features.final - baseline)
-        level_score = 0.10 * initial + 0.25 * peak + 0.45 * average + 0.20 * final
-        trend_signal = 0.10 * max(0.0, features.delta) + 0.05 * max(
-            0.0, features.slope * features.duration_seconds
-        )
-        # Dynamic evidence may strengthen a level response, but it cannot
-        # dominate a condition without a commissioned level threshold.
-        return level_score + min(max(0.0, threshold * 0.15), trend_signal)
 
     @staticmethod
     def _demo_fusion(fruit_type: str, condition: FruitCondition, overall: float) -> dict[str, Any]:
@@ -179,42 +168,34 @@ class ThresholdClassifier:
         if not profile:
             return self._invalid(fruit_type, "No compatible threshold profile")
 
-        environment = profile.get("environment", {})
-        temperature = fmean(values["temperature"])
-        humidity = fmean(values["humidity"])
-        if not environment.get("temperatureMin", -math.inf) <= temperature <= environment.get("temperatureMax", math.inf):
-            reasons.append("Temperature is outside the commissioned range")
-        if not environment.get("humidityMin", -math.inf) <= humidity <= environment.get("humidityMax", math.inf):
-            reasons.append("Humidity is outside the commissioned range")
-
-        baseline = baseline or {}
+        # Temperature and humidity remain available in the sample record but do
+        # not alter this temporary direct-threshold demonstration classifier.
         engineered = {channel: self._engineer(values[channel], timestamps) for channel in GAS_CHANNELS}
         evidence: dict[str, ThresholdEvidence] = {}
-        mapping = {
-            "formalin": FruitCondition.FORMALIN_CONTAMINATED,
-            "carbide": FruitCondition.CALCIUM_CARBIDE_CONTAMINATED,
-            "rotten": FruitCondition.ROTTEN,
-        }
+        # Ordered priority is intentional if more than one average exceeds its
+        # limit: formalin, then calcium carbide, then rotten.
+        mapping = (
+            ("formalin", FruitCondition.FORMALIN_CONTAMINATED),
+            ("carbide", FruitCondition.CALCIUM_CARBIDE_CONTAMINATED),
+            ("rotten", FruitCondition.ROTTEN),
+        )
         matches: list[tuple[float, FruitCondition, str]] = []
         response_ratios: list[float] = []
-        for name, condition in mapping.items():
+        for name, condition in mapping:
             rule = profile[name]
             channel = rule["channel"]
             features = engineered[channel]
             mean = features.average
-            base = float(baseline.get(channel, 0.0)) if rule.get("baselineAdjusted", False) else 0.0
-            adjusted = max(0.0, mean - base)
             threshold = float(rule["threshold"])
-            score = self._feature_score(features, base, threshold)
-            ratio = score / threshold if threshold > 0 else 0.0
+            ratio = mean / threshold if threshold > 0 else 0.0
             response_ratios.append(ratio)
-            matched = score >= threshold
+            matched = mean > threshold
             evidence[name] = ThresholdEvidence(
                 channel=channel,
                 raw_mean=round(mean, 6),
-                baseline=round(base, 6),
-                adjusted_mean=round(adjusted, 6),
-                feature_score=round(score, 6),
+                baseline=0.0,
+                adjusted_mean=round(mean, 6),
+                feature_score=round(mean, 6),
                 threshold=threshold,
                 threshold_index_percent=round(min(100.0, max(0.0, ratio * 100.0)), 1),
                 matched=matched,
@@ -222,32 +203,24 @@ class ThresholdClassifier:
             if matched:
                 matches.append((ratio, condition, name))
 
-        if reasons:
-            condition = FruitCondition.INCONCLUSIVE
-        elif len(matches) > 1:
-            condition = FruitCondition.INCONCLUSIVE
-            reasons.append("Multiple condition thresholds matched")
-        elif matches:
-            condition = max(matches, key=lambda item: item[0])[1]
-            reasons.append(f"{condition.value} threshold matched")
+        if matches:
+            _, condition, matched_name = matches[0]
+            matched_evidence = evidence[matched_name]
+            reasons.append(
+                f"{matched_evidence.channel.upper()} average "
+                f"{matched_evidence.raw_mean:g} > {matched_evidence.threshold:g}"
+            )
         else:
             condition = FruitCondition.FRESH
-            reasons.append("All condition indices are below their thresholds")
+            reasons.append("All three sensor averages are at or below their thresholds")
 
         route = Route.SAFE if condition == FruitCondition.FRESH else Route.UNSAFE
         if condition == FruitCondition.FRESH:
             proximity = max(response_ratios, default=0.0)
             overall_confidence = max(55.0, min(99.0, 100.0 - proximity * 45.0))
-        elif condition == FruitCondition.INCONCLUSIVE:
-            overall_confidence = 50.0
         else:
-            _, _, matched_name = max(matches, key=lambda item: item[0])
-            matched_rule = profile[matched_name]
-            score = evidence[matched_name].feature_score
-            threshold = float(matched_rule["threshold"])
-            danger = float(matched_rule.get("danger", threshold * 1.5))
-            span = max(danger - threshold, threshold * 0.1)
-            overall_confidence = 55.0 + 44.0 * min(1.0, max(0.0, (score - threshold) / span))
+            matched_ratio = matches[0][0]
+            overall_confidence = 55.0 + 44.0 * min(1.0, max(0.0, matched_ratio - 1.0))
         overall_confidence = round(overall_confidence, 1)
         return ThresholdResult(
             condition=condition,
@@ -260,7 +233,7 @@ class ThresholdClassifier:
             evidence=evidence,
             engineered_features=engineered,
             overall_confidence_percent=overall_confidence,
-            confidence_basis="Heuristic engineered-feature screening score; not a calibrated probability.",
+            confidence_basis="Deterministic comparison of sensor-window averages; not a calibrated probability.",
             demo_fusion=self._demo_fusion(fruit_type, condition, overall_confidence),
             reasons=tuple(reasons),
             disclaimer=str(self.config.get("disclaimer", "Threshold-relative research screening only.")),

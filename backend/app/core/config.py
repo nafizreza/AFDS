@@ -15,7 +15,7 @@ class ConfigurationError(ValueError):
     pass
 
 
-SORTING_MOTION_DEFAULTS = {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4}
+SORTING_MOTION_DEFAULTS = {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4, "returnHomeDelayMs": 500}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -77,6 +77,7 @@ def validate_config(values: dict[str, Any]) -> list[str]:
     within("servos.sortingMotion.offsetDegrees", sorting_motion.get("offsetDegrees"), 1, 45)
     within("servos.sortingMotion.intervalMs", sorting_motion.get("intervalMs"), 20, 1000)
     within("servos.sortingMotion.cycles", sorting_motion.get("cycles"), 1, 10)
+    within("servos.sortingMotion.returnHomeDelayMs", sorting_motion.get("returnHomeDelayMs"), 0, 5000)
     return errors
 
 

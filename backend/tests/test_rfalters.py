@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = json.loads((ROOT / "config" / "thresholds.json").read_text(encoding="utf-8"))
 
 
-def samples(mq3=100.0, mq136=100.0, ch2o=0.02, temperature=25.0, humidity=60.0, count=5):
+def samples(mq3=100.0, mq136=100.0, ch2o=0.01, temperature=25.0, humidity=60.0, count=5):
     return [
         {"elapsed": float(index), "mq3": mq3, "mq136": mq136, "ch2o": ch2o,
          "temperature": temperature, "humidity": humidity}
@@ -40,6 +40,34 @@ def test_formalin_routes_unsafe_with_index():
     assert result.demo_fusion["image"]["predictedClass"] == "Mango_Formalin Contaminated"
 
 
+def test_carbide_uses_mq3_average_above_1000():
+    result = ThresholdClassifier(CONFIG).classify("APPLE", samples(mq3=1000.1))
+    assert result.condition is FruitCondition.CALCIUM_CARBIDE_CONTAMINATED
+    assert result.route.value == "UNSAFE"
+
+
+def test_rotten_uses_mq136_average_above_10000():
+    result = ThresholdClassifier(CONFIG).classify("APPLE", samples(mq136=10000.1))
+    assert result.condition is FruitCondition.ROTTEN
+    assert result.route.value == "UNSAFE"
+
+
+def test_exact_thresholds_are_fresh_because_rules_use_strict_greater_than():
+    result = ThresholdClassifier(CONFIG).classify(
+        "APPLE", samples(ch2o=0.02, mq3=1000, mq136=10000)
+    )
+    assert result.condition is FruitCondition.FRESH
+    assert result.route.value == "SAFE"
+
+
+def test_serialized_result_exposes_dashboard_demo_fusion_contract():
+    payload = ThresholdClassifier(CONFIG).classify("APPLE", samples()).to_dict()
+    assert "demoFusion" in payload
+    assert "demo_fusion" not in payload
+    assert payload["demoFusion"]["sensor"]["weightPercent"] == 90.0
+    assert payload["demoFusion"]["image"]["weightPercent"] == 10.0
+
+
 def test_engineers_initial_peak_average_delta_and_slope_for_gas_channels():
     rows = samples(count=5)
     for index, row in enumerate(rows):
@@ -54,11 +82,12 @@ def test_engineers_initial_peak_average_delta_and_slope_for_gas_channels():
     assert set(result.engineered_features) == {"mq3", "mq136", "ch2o"}
 
 
-def test_multiple_matches_are_inconclusive_and_fail_safe():
-    result = ThresholdClassifier(CONFIG).classify("ORANGE", samples(mq3=850, mq136=800))
-    assert result.condition is FruitCondition.INCONCLUSIVE
+def test_simultaneous_matches_follow_formalin_carbide_rotten_priority():
+    result = ThresholdClassifier(CONFIG).classify(
+        "ORANGE", samples(ch2o=0.03, mq3=1100, mq136=11000)
+    )
+    assert result.condition is FruitCondition.FORMALIN_CONTAMINATED
     assert result.route.value == "UNSAFE"
-    assert "Multiple" in result.reasons[0]
 
 
 def test_invalid_channel_fails_safe():
@@ -70,7 +99,7 @@ def test_invalid_channel_fails_safe():
     assert result.route.value == "UNSAFE"
 
 
-def test_environment_outside_profile_requires_review():
+def test_environment_values_do_not_override_direct_gas_thresholds():
     result = ThresholdClassifier(CONFIG).classify("APPLE", samples(temperature=55))
-    assert result.condition.value == "INCONCLUSIVE"
-    assert result.route.value == "UNSAFE"
+    assert result.condition.value == "FRESH"
+    assert result.route.value == "SAFE"

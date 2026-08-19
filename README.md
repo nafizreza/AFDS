@@ -21,6 +21,13 @@ AFDS is a local, hardware-first fruit inspection and sorting application. It has
 5. Run `powershell -ExecutionPolicy Bypass -File scripts\start.ps1`.
 6. Open `http://127.0.0.1:8000`.
 
+
+If 5 doesn't work, try
+
+$connection = Get-NetTCPConnection -LocalPort 8000 -State Listen
+Stop-Process -Id $connection.OwningProcess
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1
+
 For separate hot-reloading frontend/backend servers, run `scripts\start-development.ps1` and open `http://127.0.0.1:5173`.
 
 ## Project map

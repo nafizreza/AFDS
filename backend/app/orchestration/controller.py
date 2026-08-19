@@ -52,6 +52,7 @@ class AFDSController:
         self.last_detection: dict[str, Any] | None = None
         self.last_classification: dict[str, Any] | None = None
         self._lock = asyncio.Lock()
+        self._maintenance_capture_lock = asyncio.Lock()
         self._cycle_task: asyncio.Task | None = None
         self._pause_gate = asyncio.Event()
         self._pause_gate.set()
@@ -251,18 +252,24 @@ class AFDSController:
             "snapshotUrl": snapshot_url,
             "demo": False,
         }
-        classification["demoFusion"]["image"]["snapshotUrl"] = snapshot_url
+        demo_fusion = classification.get("demoFusion")
+        if isinstance(demo_fusion, dict):
+            image_evidence = demo_fusion.get("image")
+            if isinstance(image_evidence, dict):
+                image_evidence["snapshotUrl"] = snapshot_url
         self.last_classification = classification
         self.database.update_cycle(self.cycle_id, classification=classification, final_condition=classification["condition"], route=classification["route"])
         await self._publish("classification", classification)
 
         if classification["route"] == "SAFE":
             await self._transition(SystemState.SORTING_SAFE)
-            await self.hardware.command(Command.SORT_SAFE, config["servos"]["safeFlap"], session_id=self.session_id, cycle_id=self.cycle_id)
+            # Automatic routing is intentionally a simple drop/hold/home movement.
+            # Oscillating SORT_* sequences remain available only in Maintenance.
+            await self.hardware.command(Command.SAFE_FLAP_TEST, config["servos"]["safeFlap"], session_id=self.session_id, cycle_id=self.cycle_id)
             self._summary["fresh"] += 1
         else:
             await self._transition(SystemState.SORTING_UNSAFE)
-            await self.hardware.command(Command.SORT_UNSAFE, config["servos"]["unsafeFlap"], session_id=self.session_id, cycle_id=self.cycle_id)
+            await self.hardware.command(Command.UNSAFE_FLAP_TEST, config["servos"]["unsafeFlap"], session_id=self.session_id, cycle_id=self.cycle_id)
             self._summary["unsafe"] += 1
             if classification["quality"] == "REVIEW_REQUIRED":
                 self._summary["inconclusive"] += 1
@@ -373,6 +380,53 @@ class AFDSController:
         self.database.audit("manual_command", {"command": command, "parameters": parameters, "result": result}, actor=operator, session_id=self.session_id, cycle_id=self.cycle_id)
         await self._publish("manual_result", {"command": command, "result": result})
         return {"state": self.snapshot(), "result": result}
+
+    async def capture_maintenance_sensors(self, operator: str, expected: int, duration_seconds: float, target_rate_hz: float) -> dict[str, Any]:
+        self.check_version(expected)
+        if self.state != SystemState.MAINTENANCE:
+            raise ApiError("CONTROL_NOT_OWNED", "Enter Maintenance before capturing sensor data")
+        if not self.hardware.connected:
+            raise ApiError("HARDWARE_DISCONNECTED", "Initialize and connect the ESP32 before capturing sensor data", 503)
+        if self._maintenance_capture_lock.locked():
+            raise ApiError("CAPTURE_IN_PROGRESS", "Another Maintenance sensor capture is already running")
+
+        capture_id = f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:6].upper()}"
+        started_at = dt.datetime.now(dt.timezone.utc)
+        async with self._maintenance_capture_lock:
+            try:
+                samples = await self.hardware.collect_sensors(
+                    duration_seconds,
+                    target_rate_hz,
+                    "MAINTENANCE",
+                    capture_id,
+                )
+            except HardwareError as exc:
+                raise ApiError("SENSOR_CAPTURE_FAILED", str(exc), 503) from exc
+
+        for sample in samples:
+            elapsed = float(sample.get("elapsed", 0.0))
+            sample["capturedAtUtc"] = (started_at + dt.timedelta(seconds=elapsed)).isoformat()
+        completed_at = dt.datetime.now(dt.timezone.utc)
+        result = {
+            "captureId": capture_id,
+            "startedAtUtc": started_at.isoformat(),
+            "completedAtUtc": completed_at.isoformat(),
+            "requestedDurationSeconds": duration_seconds,
+            "targetRateHz": target_rate_hz,
+            "sampleCount": len(samples),
+            "samples": samples,
+        }
+        self.database.audit(
+            "maintenance_sensor_capture",
+            {key: value for key, value in result.items() if key != "samples"},
+            actor=operator,
+        )
+        await self._publish("maintenance_sensor_capture_complete", {
+            "captureId": capture_id,
+            "sampleCount": len(samples),
+            "durationSeconds": duration_seconds,
+        })
+        return result
 
     async def software_estop(self, operator: str) -> dict[str, Any]:
         if self._cycle_task and not self._cycle_task.done():

@@ -63,6 +63,11 @@ class ManualCommandRequest(OperatorRequest):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class SensorCaptureRequest(OperatorRequest):
+    duration_seconds: float = Field(alias="durationSeconds", ge=1, le=900)
+    target_rate_hz: float = Field(alias="targetRateHz", ge=0.2, le=20)
+
+
 class ConfigurationSaveRequest(OperatorRequest):
     description: str = Field(min_length=1, max_length=240)
     values: dict[str, Any]
@@ -78,4 +83,3 @@ class ApiError(RuntimeError):
         self.code = code
         self.message = message
         self.status = status
-

@@ -161,7 +161,7 @@ class SerialHardware:
         inlet = servos["inletValve"]
         safe = servos["safeFlap"]
         unsafe = servos["unsafeFlap"]
-        sorting_motion = servos.get("sortingMotion", {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4})
+        sorting_motion = servos.get("sortingMotion", {"offsetDegrees": 10, "intervalMs": 90, "cycles": 4, "returnHomeDelayMs": 500})
 
         if command_name == Command.VALVE_OPEN.value:
             result.setdefault("angle", result.get("openAngle", inlet["openAngle"]))
@@ -182,6 +182,7 @@ class SerialHardware:
                 result.setdefault("shakeOffsetDegrees", sorting_motion.get("offsetDegrees", 10))
                 result.setdefault("shakeCycles", sorting_motion.get("cycles", 4))
                 result.setdefault("shakeStepMs", sorting_motion.get("intervalMs", 90))
+                result.setdefault("returnHomeDelayMs", sorting_motion.get("returnHomeDelayMs", 500))
         elif command_name == Command.SAFE_FLAP_HOME.value:
             result.setdefault("angle", result.get("homeAngle", safe["homeAngle"]))
             result.setdefault("settleMs", safe["settleMs"])
@@ -195,6 +196,7 @@ class SerialHardware:
                 result.setdefault("shakeOffsetDegrees", sorting_motion.get("offsetDegrees", 10))
                 result.setdefault("shakeCycles", sorting_motion.get("cycles", 4))
                 result.setdefault("shakeStepMs", sorting_motion.get("intervalMs", 90))
+                result.setdefault("returnHomeDelayMs", sorting_motion.get("returnHomeDelayMs", 500))
         elif command_name == Command.UNSAFE_FLAP_HOME.value:
             result.setdefault("angle", result.get("homeAngle", unsafe["homeAngle"]))
             result.setdefault("settleMs", unsafe["settleMs"])
@@ -300,4 +302,12 @@ class SerialHardware:
         normalized = command.upper()
         if normalized not in allowed:
             raise HardwareError(f"Unsupported manual command: {command}")
-        return await self.command(normalized, {**parameters, "operator": operator})
+        completion_timeout = None
+        if normalized == Command.PURGE_TIMED.value:
+            maximum_seconds = float(parameters.get("maximumSeconds", self.config["purge"]["maximumSeconds"]))
+            completion_timeout = maximum_seconds + 5
+        return await self.command(
+            normalized,
+            {**parameters, "operator": operator},
+            completion_timeout=completion_timeout,
+        )
