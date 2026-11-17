@@ -1,10 +1,10 @@
 # AFDS - Adulterated Fruit Detection System
 In Command Prompt (CMD), run:
 
-cd /d D:\AFDS
-call .venv\Scripts\activate.bat
-set AFDS_SERIAL_PORT=COM7
-python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+- cd /d D:\AFDS
+- call .venv\Scripts\activate.bat
+- set AFDS_SERIAL_PORT=COM7
+- python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 
 Open http://127.0.0.1:8000.
 
